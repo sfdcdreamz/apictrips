@@ -21,32 +21,21 @@ async function getTripData(tripId: string) {
     .single()
   if (!trip) return null
 
-  const { data: members } = await supabase
-    .from('members')
-    .select('*')
-    .eq('trip_id', tripId)
-    .order('joined_at', { ascending: true })
-
   const serviceSupabase = createServiceRoleClient()
 
-  const { data: polls } = await serviceSupabase
-    .from('polls')
-    .select('*, votes(*)')
-    .eq('trip_id', tripId)
-    .order('created_at', { ascending: false })
-
-  const { data: pool } = await serviceSupabase
-    .from('pools')
-    .select('*, expenses(*)')
-    .eq('trip_id', tripId)
-    .single()
-
-  const { data: iItems } = await serviceSupabase
-    .from('itinerary_items')
-    .select('day_number')
-    .eq('trip_id', tripId)
-
-  const imageUrl = await getDestinationImage(trip.destination)
+  const [
+    { data: members },
+    { data: polls },
+    { data: pool },
+    { data: iItems },
+    imageUrl,
+  ] = await Promise.all([
+    supabase.from('members').select('*').eq('trip_id', tripId).order('joined_at', { ascending: true }),
+    serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
+    serviceSupabase.from('itinerary_items').select('day_number').eq('trip_id', tripId),
+    getDestinationImage(trip.destination),
+  ])
 
   return {
     trip,
