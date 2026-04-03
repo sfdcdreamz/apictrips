@@ -108,6 +108,19 @@ All tables use `uuid_generate_v4()` PKs and have RLS enabled. Service role clien
 
 > **`itinerary_items` table:** must be created manually — run the SQL block at the bottom of `supabase/schema.sql` in the Supabase SQL editor.
 
+## Performance Rules
+
+- **Always parallelize independent Supabase fetches with `Promise.all`** — never chain `await` calls that don't depend on each other. Sequential awaits were the main source of slowness.
+- Pattern for server pages that need multiple tables:
+```ts
+const [{ data: a }, { data: b }, { data: c }] = await Promise.all([
+  supabase.from('table_a').select('*'),
+  supabase.from('table_b').select('*'),
+  supabase.from('table_c').select('*'),
+])
+```
+- `getDestinationImage` makes an outbound Unsplash HTTP call — include it inside the `Promise.all`, never await it separately. Requires `UNSPLASH_ACCESS_KEY` env var; short-circuits instantly if unset.
+
 ## Types (`src/types/index.ts`)
 
 All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, `Expense`, `ItineraryItem`, `TripHealth`, `ConflictResult`.
