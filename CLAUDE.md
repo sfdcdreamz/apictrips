@@ -2,17 +2,28 @@
 
 # APIcTrips — Project Guide
 
+## Next.js 16 Breaking Changes (vs training data)
+- **Middleware file is `src/proxy.ts`**, not `src/middleware.ts`. Next.js 16 renamed the convention. Having both files causes a hard build error. Never create `src/middleware.ts`.
+- **Route params are a Promise** — always `await params` before destructuring (see API Route Pattern below).
+
 ## Stack
-- **Next.js 16.2.2** (App Router) — see AGENTS.md warning about breaking changes
+- **Next.js 16.2.2** (App Router, Turbopack) — see AGENTS.md warning about breaking changes
 - **React 19.2.4**
 - **Supabase** (`@supabase/ssr ^0.10`, `@supabase/supabase-js ^2`) — auth + database
 - **Tailwind CSS v4**
 - **TypeScript 5.9**
 
+## Deployment
+- Hosted on **Vercel** — auto-deploys on push to `main`
+- Vercel project: `sfdcdreamzs-projects / apictrips`
+- Framework preset must be set to **Next.js** in Vercel → Settings → Build and Deployment
+- Required env vars in Vercel: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+
 ## Project Structure
 
 ```
 src/
+  proxy.ts                        # Middleware (auth guard + session refresh) — NOT middleware.ts
   app/
     api/                          # API routes (server-only)
       trips/[tripId]/
@@ -67,12 +78,12 @@ src/
 
 All routes follow this sequence:
 1. `await createClient()` → `supabase.auth.getUser()` → 401 if no user
-2. Verify organiser ownership via `supabase.from('trips').eq('organiser_id', user.id)`→ 403 if not owner
+2. Verify organiser ownership via `supabase.from('trips').eq('organiser_id', user.id)` → 403 if not owner
 3. Validate input → 400 on bad data
 4. `createServiceRoleClient()` → perform the write
-5. Return `NextResponse.json({ data }, { status: 201/200 })` or `204` for deletes
+5. Return `NextResponse.json({ data }, { status: 201/200 })` or `new NextResponse(null, { status: 204 })` for deletes
 
-Route params are a **Promise** in this Next.js version — always `await params`:
+Route params are a **Promise** — always `await params`:
 ```ts
 export async function POST(
   request: Request,
@@ -94,6 +105,8 @@ export async function POST(
 | `itinerary_items` | `trip_id`, `day_number`, `title`, `item_type`, `status` (pending/done), `cost` |
 
 All tables use `uuid_generate_v4()` PKs and have RLS enabled. Service role client bypasses RLS — use it only after verifying auth manually.
+
+> **`itinerary_items` table:** must be created manually — run the SQL block at the bottom of `supabase/schema.sql` in the Supabase SQL editor.
 
 ## Types (`src/types/index.ts`)
 
