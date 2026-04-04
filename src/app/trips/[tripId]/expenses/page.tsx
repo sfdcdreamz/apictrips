@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { getDestinationImage } from '@/lib/destination-image'
+import DestinationHero from '@/components/ui/DestinationHero'
 import PoolSetupForm from '@/components/expenses/PoolSetupForm'
 import LogExpenseForm from '@/components/expenses/LogExpenseForm'
 import ExpenseList from '@/components/expenses/ExpenseList'
@@ -25,15 +27,16 @@ async function getExpensesData(tripId: string) {
 
   const { data: trip } = await serviceSupabase
     .from('trips')
-    .select('id, group_size, organiser_id')
+    .select('id, group_size, organiser_id, name, destination')
     .eq('id', tripId)
     .single()
   if (!trip) return null
 
-  const [{ data: pool }, { data: members }, { data: settlements }] = await Promise.all([
+  const [{ data: pool }, { data: members }, { data: settlements }, imageUrl] = await Promise.all([
     serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
     serviceSupabase.from('members').select('id, name, email, upi_id').eq('trip_id', tripId),
     serviceSupabase.from('settlements').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    getDestinationImage(trip.destination),
   ])
 
   return {
@@ -42,6 +45,8 @@ async function getExpensesData(tripId: string) {
     members: (members || []) as Pick<Member, 'id' | 'name' | 'email' | 'upi_id'>[],
     settlements: (settlements || []) as Settlement[],
     isOrganiser: trip.organiser_id === user.id,
+    imageUrl: imageUrl || '',
+    tripDestination: trip.destination as string,
   }
 }
 
@@ -54,7 +59,7 @@ export default async function ExpensesPage({
   const data = await getExpensesData(tripId)
   if (!data) notFound()
 
-  const { pool, memberCount, members, settlements, isOrganiser } = data
+  const { pool, memberCount, members, settlements, isOrganiser, imageUrl, tripDestination } = data
   const expenses: Expense[] = pool?.expenses || []
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
   const remaining = (pool?.total_amount || 0) - totalSpent
@@ -73,35 +78,16 @@ export default async function ExpensesPage({
     .slice(0, 10)
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-      {/* Header */}
-      <div className="bg-gradient-to-r from-orange-500 to-amber-400 rounded-2xl p-6 text-white">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold">Expense Pool</h1>
-            {pool && (
-              <p className="text-orange-100 text-sm mt-1">
-                {currencySymbol}{perMember.toLocaleString()} per member · {memberCount} members
-              </p>
-            )}
-          </div>
-          <div className="flex flex-col items-end gap-2 shrink-0">
-            {pool && (
-              <div className="bg-white/20 rounded-xl px-4 py-2 text-right">
-                <div className="text-xl font-bold">{currencySymbol}{Math.abs(remaining).toLocaleString()}</div>
-                <div className="text-xs text-orange-100">{remaining < 0 ? 'over budget' : 'remaining'}</div>
-              </div>
-            )}
-            {isOrganiser && pool && (
-              <a
-                href={`/api/trips/${tripId}/export/expenses`}
-                download
-                className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors"
-              >
-                Download CSV
-              </a>
-            )}
-          </div>
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      {/* Hero banner */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <DestinationHero imageUrl={imageUrl} destination={tripDestination} height="sm" />
+        <div className="absolute inset-0 bg-gradient-to-br from-orange-500/80 to-amber-400/60 flex flex-col justify-end p-6">
+          <p className="text-white/70 text-sm mb-1">📍 {tripDestination}</p>
+          <h1 className="text-2xl font-bold text-white">💰 Expense Pool</h1>
+          <p className="text-white/80 text-sm mt-1">
+            {pool ? `${currencySymbol}${perMember.toLocaleString()}/member · ${memberCount} members` : 'Track spending, split fairly, settle fast.'}
+          </p>
         </div>
       </div>
 
@@ -123,7 +109,18 @@ export default async function ExpensesPage({
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <div className="flex items-center justify-between mb-3">
               <span className="text-sm text-gray-500">Total Pool</span>
-              <span className="font-semibold text-gray-800">{currencySymbol}{pool.total_amount.toLocaleString()}</span>
+              <div className="flex items-center gap-3">
+                {isOrganiser && (
+                  <a
+                    href={`/api/trips/${tripId}/export/expenses`}
+                    download
+                    className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+                  >
+                    Download CSV
+                  </a>
+                )}
+                <span className="font-semibold text-gray-800">{currencySymbol}{pool.total_amount.toLocaleString()}</span>
+              </div>
             </div>
             <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
               <div

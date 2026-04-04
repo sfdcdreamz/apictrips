@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { getDestinationImage } from '@/lib/destination-image'
+import DestinationHero from '@/components/ui/DestinationHero'
 import PollsRealtimeWrapper from '@/components/decisions/PollsRealtimeWrapper'
 import CreatePollForm from '@/components/decisions/CreatePollForm'
 import PivotPollForm from '@/components/decisions/PivotPollForm'
@@ -14,7 +16,7 @@ async function getPollsData(tripId: string) {
 
   const { data: trip } = await serviceSupabase
     .from('trips')
-    .select('id, start_date, end_date, organiser_id')
+    .select('id, start_date, end_date, organiser_id, destination')
     .eq('id', tripId)
     .single()
   if (!trip) return null
@@ -72,22 +74,19 @@ async function getPollsData(tripId: string) {
     }
   }
 
-  const { data: polls } = await serviceSupabase
-    .from('polls')
-    .select('*, votes(*)')
-    .eq('trip_id', tripId)
-    .order('created_at', { ascending: false })
-
-  const { data: members } = await serviceSupabase
-    .from('members')
-    .select('name, email')
-    .eq('trip_id', tripId)
+  const [{ data: polls }, { data: members }, imageUrl] = await Promise.all([
+    serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
+    serviceSupabase.from('members').select('name, email').eq('trip_id', tripId),
+    getDestinationImage(trip.destination),
+  ])
 
   return {
     polls: (polls || []) as PollWithVotes[],
     members: (members || []) as Pick<Member, 'name' | 'email'>[],
     isLive,
     isOrganiser,
+    imageUrl: imageUrl || '',
+    tripDestination: trip.destination as string,
   }
 }
 
@@ -100,14 +99,18 @@ export default async function PollsPage({
   const data = await getPollsData(tripId)
   if (!data) notFound()
 
-  const { polls, members, isLive, isOrganiser } = data
+  const { polls, members, isLive, isOrganiser, imageUrl, tripDestination } = data
 
   return (
-    <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
-      {/* Header band */}
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold">Decision Engine</h1>
-        <p className="text-emerald-100 text-sm mt-1">Vote on open polls — majority wins, decisions lock.</p>
+    <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
+      {/* Hero banner */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <DestinationHero imageUrl={imageUrl} destination={tripDestination} height="sm" />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/80 to-teal-500/60 flex flex-col justify-end p-6">
+          <p className="text-white/70 text-sm mb-1">📍 {tripDestination}</p>
+          <h1 className="text-2xl font-bold text-white">🗳 Decision Engine</h1>
+          <p className="text-white/80 text-sm mt-1">Vote on open polls — majority wins, decisions lock.</p>
+        </div>
       </div>
 
       {/* Pivot poll — organiser only, during LIVE mode */}

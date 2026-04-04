@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { getDestinationImage } from '@/lib/destination-image'
+import DestinationHero from '@/components/ui/DestinationHero'
 import AddVendorForm from '@/components/vendors/AddVendorForm'
 import DeleteVendorButton from '@/components/vendors/DeleteVendorButton'
 import type { VendorContact } from '@/types'
@@ -21,15 +23,19 @@ async function getVendorData(tripId: string) {
   const serviceSupabase = createServiceRoleClient()
 
   const [{ data: trip }, { data: vendors }] = await Promise.all([
-    serviceSupabase.from('trips').select('id, organiser_id').eq('id', tripId).single(),
+    serviceSupabase.from('trips').select('id, organiser_id, destination').eq('id', tripId).single(),
     serviceSupabase.from('vendor_contacts').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
   ])
 
   if (!trip) return null
 
+  const imageUrl = await getDestinationImage(trip.destination)
+
   return {
     isOrganiser: trip.organiser_id === user.id,
     vendors: (vendors || []) as VendorContact[],
+    imageUrl: imageUrl || '',
+    tripDestination: trip.destination as string,
   }
 }
 
@@ -42,15 +48,18 @@ export default async function VendorsPage({
   const data = await getVendorData(tripId)
   if (!data) notFound()
 
-  const { isOrganiser, vendors } = data
+  const { isOrganiser, vendors, imageUrl, tripDestination } = data
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold">Vendor Contacts</h1>
-        <p className="text-emerald-100 text-sm mt-1">
-          Drivers, hotels, guides and more — tap a number to call.
-        </p>
+      {/* Hero banner */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <DestinationHero imageUrl={imageUrl} destination={tripDestination} height="sm" />
+        <div className="absolute inset-0 bg-gradient-to-br from-violet-600/80 to-purple-500/60 flex flex-col justify-end p-6">
+          <p className="text-white/70 text-sm mb-1">📍 {tripDestination}</p>
+          <h1 className="text-2xl font-bold text-white">📞 Vendor Contacts</h1>
+          <p className="text-white/80 text-sm mt-1">Drivers, hotels, guides and more — tap a number to call.</p>
+        </div>
       </div>
 
       {isOrganiser && (

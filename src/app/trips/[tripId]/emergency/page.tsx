@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { getDestinationImage } from '@/lib/destination-image'
+import DestinationHero from '@/components/ui/DestinationHero'
 
 const EMERGENCY_NUMBERS = [
   { label: 'Police', number: '100' },
@@ -27,11 +29,18 @@ export default async function EmergencyPage({
 
   if (!trip) notFound()
 
+  const imageUrl = await getDestinationImage(trip.destination)
+
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      <div className="bg-red-600 rounded-2xl p-5 text-white">
-        <h1 className="text-2xl font-bold">Emergency Card</h1>
-        <p className="text-red-100 text-sm mt-1">{trip.name} · {trip.destination}</p>
+      {/* Hero banner */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <DestinationHero imageUrl={imageUrl} destination={trip.destination} height="sm" />
+        <div className="absolute inset-0 bg-gradient-to-br from-red-600/80 to-rose-500/60 flex flex-col justify-end p-6">
+          <p className="text-white/70 text-sm mb-1">📍 {trip.destination}</p>
+          <h1 className="text-2xl font-bold text-white">🚨 Emergency Card</h1>
+          <p className="text-white/80 text-sm mt-1">{trip.name} · Emergency numbers &amp; member contacts.</p>
+        </div>
       </div>
 
       {/* Emergency numbers */}

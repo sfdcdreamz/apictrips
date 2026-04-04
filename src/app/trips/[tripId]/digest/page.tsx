@@ -1,5 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { getDestinationImage } from '@/lib/destination-image'
+import DestinationHero from '@/components/ui/DestinationHero'
 import { formatDateRange } from '@/lib/utils'
 import type { Poll, Expense, ItineraryItem } from '@/types'
 import DigestShareButton from '@/components/trips/DigestShareButton'
@@ -26,7 +28,9 @@ async function getDigestData(tripId: string) {
     serviceSupabase.from('members').select('name, status').eq('trip_id', tripId),
   ])
 
-  return { trip, polls: polls || [], pool, itinerary: itinerary || [], members: members || [] }
+  const imageUrl = await getDestinationImage(trip.destination)
+
+  return { trip, polls: polls || [], pool, itinerary: itinerary || [], members: members || [], imageUrl: imageUrl || '' }
 }
 
 export default async function DigestPage({
@@ -38,7 +42,7 @@ export default async function DigestPage({
   const data = await getDigestData(tripId)
   if (!data) notFound()
 
-  const { trip, polls, pool, itinerary, members } = data
+  const { trip, polls, pool, itinerary, members, imageUrl } = data
   const expenses: Expense[] = (pool as { expenses: Expense[] } | null)?.expenses || []
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
   const currencySymbol = pool?.currency === 'INR' ? '₹' : (pool?.currency || '')
@@ -55,11 +59,14 @@ export default async function DigestPage({
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-5">
-      <div className="bg-gradient-to-r from-emerald-600 to-teal-500 rounded-2xl p-6 text-white">
-        <h1 className="text-2xl font-bold">Decisions Digest</h1>
-        <p className="text-emerald-100 text-sm mt-1">
-          {trip.name} · {formatDateRange(trip.start_date, trip.end_date)}
-        </p>
+      {/* Hero banner */}
+      <div className="relative rounded-2xl overflow-hidden">
+        <DestinationHero imageUrl={imageUrl} destination={trip.destination} height="sm" />
+        <div className="absolute inset-0 bg-gradient-to-br from-emerald-600/80 to-teal-500/60 flex flex-col justify-end p-6">
+          <p className="text-white/70 text-sm mb-1">📍 {trip.destination}</p>
+          <h1 className="text-2xl font-bold text-white">📄 Decisions Digest</h1>
+          <p className="text-white/80 text-sm mt-1">{trip.name} · {formatDateRange(trip.start_date, trip.end_date)}</p>
+        </div>
       </div>
 
       {/* Share controls */}
