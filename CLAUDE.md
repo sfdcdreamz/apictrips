@@ -1,14 +1,13 @@
 @AGENTS.md
 
-## Last Session Note (2026-04-04, Session 2)
+## Last Session Note (2026-04-04, Session 3)
 
 **Completed this session:**
-- ✅ #7 Member self-service page (`/trips/[id]/member`) — RSVP toggle, UPI ID, polls, itinerary read-only
-- ✅ Non-organiser redirect: `/trips/[id]` now redirects non-organisers to `/trips/[id]/member`
-- ✅ UPI ID field in VibeCheckForm + join route
-- ✅ EditTripForm component (inline edit of name/destination/dates, organiser only)
-- ✅ Optimistic UI for itinerary toggle (#27), expense logging (#26), poll vote highlight (#28)
-- ✅ #24 Anonymous budget disclosure — member submits range anonymously, organiser sees bar chart
+- ✅ #48 Live mode auto-switch — red LIVE badge in TripNav, green banner on dashboard when `start_date ≤ today ≤ end_date`
+- ✅ #57 Expense CSV export — GET `/api/trips/[tripId]/export/expenses`, Download CSV button (organiser only)
+- ✅ #34 Compatibility check at invite — `existingVibeMembers` returned from invite API, live Vibe Impact card in VibeCheckForm
+- ✅ #51 Emergency card — `/trips/[tripId]/emergency` page with member list + India emergency numbers; Emergency tab added to TripNav
+- ✅ #47 Live presence — `TripPresence` client component using Supabase Realtime Presence; shows "N viewing" badge when >1 viewer
 
 **DB schema changes still needed** — run ALL of these in Supabase SQL editor before testing:
 ```sql
@@ -275,7 +274,7 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 | 31 | Ghost member detection (alert when member disengages) | 🔲 | New logic + dashboard alert |
 | 32 | Dropout ripple effect calculator (cost/itinerary impact) | 🔲 | New: `src/lib/dropout-calculator.ts` |
 | 33 | Trip momentum score (engagement metric with nudges) | 🔲 | New: `src/lib/momentum.ts` |
-| 34 | Compatibility check before adding new member | 🔲 | Invite flow extension |
+| 34 | Compatibility check before adding new member | ✅ | `src/components/invite/VibeCheckForm.tsx` + invite API |
 
 ### Tier 7 — Payments (India-first UPI)
 | # | Item | Status | Key files |
@@ -300,15 +299,15 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 |---|------|--------|-----------|
 | 45 | Live poll vote counts (Supabase Realtime) | 🔲 | polls page |
 | 46 | Activity notifications (in-app toast) | 🔲 | New: notification system |
-| 47 | Live presence (who's viewing the trip) | 🔲 | Supabase Realtime |
+| 47 | Live presence (who's viewing the trip) | ✅ | `src/components/trips/TripPresence.tsx` |
 
 ### Tier 10 — Mid-Trip Mode
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 48 | Auto-switch to live mode on `start_date` | 🔲 | layout or dashboard |
+| 48 | Auto-switch to live mode on `start_date` | ✅ | layout or dashboard |
 | 49 | Receipt photo capture (Supabase Storage) | 🔲 | expense logging |
 | 50 | Pivot poll (instant re-vote mid-trip) | 🔲 | polls |
-| 51 | Emergency card (hospital, embassy, member contacts) | 🔲 | New page |
+| 51 | Emergency card (hospital, embassy, member contacts) | ✅ | `src/app/trips/[tripId]/emergency/page.tsx` |
 | 52 | Shared vendor contact book (driver, hotel, guide) | 🔲 | New feature |
 
 ### Tier 11 — AI Features
@@ -322,7 +321,7 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
 | 56 | Post-trip debt amnesty vote (forgive small balances) | 🔲 | settlements + voting |
-| 57 | Expense report export (PDF/CSV) | 🔲 | New export route |
+| 57 | Expense report export (PDF/CSV) | ✅ | `src/app/api/trips/[tripId]/export/expenses/route.ts` |
 | 58 | Trip recap (auto-generated summary) | 🔲 | New page |
 | 59 | Trip ratings | 🔲 | New feature |
 | 60 | Trip memories / photo gallery (Supabase Storage) | 🔲 | New feature |

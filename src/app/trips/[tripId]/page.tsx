@@ -70,11 +70,13 @@ async function DashboardInsights({
   members,
   polls,
   startDate,
+  endDate,
 }: {
   tripId: string
   members: Member[]
   polls: PollWithVotes[]
   startDate: string
+  endDate: string
 }) {
   const serviceSupabase = createServiceRoleClient()
   const { data: budgetData } = await serviceSupabase
@@ -90,12 +92,28 @@ async function DashboardInsights({
 
   const conflicts = detectConflicts(members)
   const tripHealth = computeTripHealth(members, polls)
+
+  const today = new Date()
+  const start = new Date(startDate)
+  const end = new Date(endDate)
+  const isLive = today >= start && today <= end
   const daysUntilTrip = Math.ceil(
-    (new Date(startDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+    (start.getTime() - Date.now()) / (1000 * 60 * 60 * 24)
   )
 
   return (
     <>
+      {/* Live mode banner */}
+      {isLive && (
+        <div className="bg-green-500 rounded-xl px-4 py-3 flex items-center gap-3">
+          <span className="h-3 w-3 rounded-full bg-white animate-pulse shrink-0" />
+          <div>
+            <p className="text-sm font-bold text-white">Trip is LIVE</p>
+            <p className="text-xs text-green-100">You&apos;re currently on this trip. Have fun!</p>
+          </div>
+        </div>
+      )}
+
       {/* Trip Health + countdown */}
       <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
         tripHealth.status === 'healthy' ? 'bg-emerald-50 border-emerald-200' :
@@ -112,13 +130,13 @@ async function DashboardInsights({
           </p>
           <p className="text-xs text-gray-500 mt-0.5">{tripHealth.reason}</p>
         </div>
-        {daysUntilTrip > 0 && (
+        {!isLive && daysUntilTrip > 0 && (
           <div className="text-right shrink-0">
             <p className="text-lg font-bold text-gray-800">{daysUntilTrip}</p>
             <p className="text-xs text-gray-400">days to go</p>
           </div>
         )}
-        {daysUntilTrip <= 0 && (
+        {!isLive && daysUntilTrip <= 0 && (
           <div className="text-right shrink-0">
             <p className="text-sm font-bold text-emerald-700">In progress</p>
           </div>
@@ -406,6 +424,7 @@ export default async function TripDashboardPage({
           members={members}
           polls={polls}
           startDate={trip.start_date}
+          endDate={trip.end_date}
         />
       </Suspense>
 

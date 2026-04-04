@@ -1,7 +1,8 @@
 'use client'
 
-import { useState } from 'react'
-import type { VibeBudget, VibePace, VibeStyle, VibeAccommodation, MemberStatus } from '@/types'
+import { useState, useMemo } from 'react'
+import type { VibeBudget, VibePace, VibeStyle, VibeAccommodation, MemberStatus, Member } from '@/types'
+import { computeVibeScore } from '@/lib/vibe-score'
 
 const BUDGET_OPTIONS: { value: VibeBudget; label: string; desc: string }[] = [
   { value: 'budget', label: 'Budget', desc: 'Keep it lean' },
@@ -57,12 +58,15 @@ function VibeCard<T extends string>({
   )
 }
 
+type VibeSnapshot = Pick<Member, 'vibe_budget' | 'vibe_pace' | 'vibe_style' | 'vibe_accommodation' | 'vibe_completed'>
+
 interface Props {
   inviteCode: string
   tripName: string
+  existingVibeMembers?: VibeSnapshot[]
 }
 
-export default function VibeCheckForm({ inviteCode, tripName }: Props) {
+export default function VibeCheckForm({ inviteCode, tripName, existingVibeMembers = [] }: Props) {
   const [step, setStep] = useState<'form' | 'done'>('form')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -74,6 +78,29 @@ export default function VibeCheckForm({ inviteCode, tripName }: Props) {
   const [upiId, setUpiId] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  const vibeSelectedCount = [budget, pace, style, accommodation].filter(Boolean).length
+
+  const vibeImpact = useMemo(() => {
+    const completed = existingVibeMembers.filter((m) => m.vibe_completed)
+    if (completed.length < 1 || vibeSelectedCount < 2) return null
+
+    const baseScore = completed.length >= 2 ? computeVibeScore(completed as Member[]).score : null
+
+    const hypothetical = [
+      ...completed,
+      {
+        vibe_budget: budget || null,
+        vibe_pace: pace || null,
+        vibe_style: style || null,
+        vibe_accommodation: accommodation || null,
+        vibe_completed: true,
+      },
+    ]
+    const { score, label } = computeVibeScore(hypothetical as Member[])
+
+    return { baseScore, projectedScore: score, label }
+  }, [budget, pace, style, accommodation, existingVibeMembers, vibeSelectedCount])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -221,6 +248,33 @@ export default function VibeCheckForm({ inviteCode, tripName }: Props) {
           </div>
         </div>
       </div>
+
+      {/* Vibe Impact preview */}
+      {vibeImpact && (
+        <div className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 space-y-1">
+          <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Vibe Impact</p>
+          {vibeImpact.baseScore !== null && (
+            <p className="text-xs text-gray-500">
+              Current group score: <span className="font-semibold text-gray-700">{vibeImpact.baseScore}%</span>
+            </p>
+          )}
+          <p className="text-xs text-gray-500">
+            With you:{' '}
+            <span className={`font-semibold ${
+              vibeImpact.projectedScore >= 80 ? 'text-emerald-600' :
+              vibeImpact.projectedScore >= 60 ? 'text-amber-600' : 'text-red-500'
+            }`}>
+              {vibeImpact.projectedScore}% — {vibeImpact.label}
+            </span>{' '}
+            {vibeImpact.baseScore !== null && (
+              <span className="text-gray-400">
+                ({vibeImpact.projectedScore > vibeImpact.baseScore ? '↑ improving' :
+                  vibeImpact.projectedScore < vibeImpact.baseScore ? '↓ lowering' : '→ neutral'})
+              </span>
+            )}
+          </p>
+        </div>
+      )}
 
       {error && (
         <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>

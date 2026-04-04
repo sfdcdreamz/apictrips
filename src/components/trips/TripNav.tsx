@@ -8,10 +8,11 @@ import { getInitials, getAvatarColor } from '@/lib/utils'
 interface Props {
   tripId: string
   tripName: string
+  isLive?: boolean
   members: { name: string }[]
 }
 
-export default function TripNav({ tripId, tripName: _tripName, members }: Props) {
+export default function TripNav({ tripId, tripName: _tripName, isLive, members }: Props) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
 
@@ -24,6 +25,7 @@ export default function TripNav({ tripId, tripName: _tripName, members }: Props)
     { label: 'Vibe Check', href: `/trips/${tripId}/vibe-check` },
     { label: 'Itinerary', href: `/trips/${tripId}/itinerary` },
     { label: 'Digest', href: `/trips/${tripId}/digest` },
+    { label: 'Emergency', href: `/trips/${tripId}/emergency` },
   ]
 
   function isActive(href: string) {
@@ -65,9 +67,17 @@ export default function TripNav({ tripId, tripName: _tripName, members }: Props)
             <line x1="3" y1="16" x2="19" y2="16" />
           </svg>
         </button>
-        <Link href="/dashboard" className="text-base font-bold text-gray-900 text-center">
-          APIcTrips
-        </Link>
+        <div className="flex items-center justify-center gap-2">
+          <Link href="/dashboard" className="text-base font-bold text-gray-900">
+            APIcTrips
+          </Link>
+          {isLive && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </div>
         <div className="justify-self-end">{avatars}</div>
       </div>
 
@@ -93,12 +103,17 @@ export default function TripNav({ tripId, tripName: _tripName, members }: Props)
 
       {/* Desktop layout — unchanged */}
       <div className="hidden md:flex max-w-5xl mx-auto items-center gap-0.5 overflow-x-auto">
-        <Link
-          href="/dashboard"
-          className="text-base font-bold text-gray-900 mr-4 py-4 shrink-0"
-        >
-          APIcTrips
-        </Link>
+        <div className="flex items-center gap-2 mr-4 shrink-0">
+          <Link href="/dashboard" className="text-base font-bold text-gray-900 py-4">
+            APIcTrips
+          </Link>
+          {isLive && (
+            <span className="flex items-center gap-1 text-xs font-semibold text-red-600">
+              <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+              LIVE
+            </span>
+          )}
+        </div>
 
         {tabs.map((tab) => (
           <Link

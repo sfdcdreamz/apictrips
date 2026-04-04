@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import TripNav from '@/components/trips/TripNav'
 import TripRoleProvider from '@/components/trips/TripRoleContext'
 import ActivityToast from '@/components/ui/ActivityToast'
+import TripPresence from '@/components/trips/TripPresence'
 
 export default async function TripLayout({
   children,
@@ -21,7 +22,7 @@ export default async function TripLayout({
 
   // Fetch trip and members in parallel
   const [{ data: trip }, { data: members }] = await Promise.all([
-    serviceSupabase.from('trips').select('name, organiser_id').eq('id', tripId).single(),
+    serviceSupabase.from('trips').select('name, organiser_id, start_date, end_date').eq('id', tripId).single(),
     serviceSupabase.from('members').select('name, email').eq('trip_id', tripId),
   ])
 
@@ -35,16 +36,21 @@ export default async function TripLayout({
     if (!isMember) notFound()
   }
 
+  const today = new Date()
+  const isLive = today >= new Date(trip.start_date) && today <= new Date(trip.end_date)
+
   return (
     <TripRoleProvider tripId={tripId} isOrganiser={isOrganiser}>
       <div className="min-h-screen bg-[#faf8f4]">
         <TripNav
           tripId={tripId}
           tripName={trip.name}
+          isLive={isLive}
           members={(members || []).map((m) => ({ name: m.name }))}
         />
         {children}
         <ActivityToast tripId={tripId} />
+        <TripPresence tripId={tripId} userId={user.id} />
       </div>
     </TripRoleProvider>
   )

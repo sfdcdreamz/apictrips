@@ -86,12 +86,23 @@ export default async function ExpensesPage({
               </p>
             )}
           </div>
-          {pool && (
-            <div className="bg-white/20 rounded-xl px-4 py-2 text-right shrink-0">
-              <div className="text-xl font-bold">{currencySymbol}{Math.abs(remaining).toLocaleString()}</div>
-              <div className="text-xs text-orange-100">{remaining < 0 ? 'over budget' : 'remaining'}</div>
-            </div>
-          )}
+          <div className="flex flex-col items-end gap-2 shrink-0">
+            {pool && (
+              <div className="bg-white/20 rounded-xl px-4 py-2 text-right">
+                <div className="text-xl font-bold">{currencySymbol}{Math.abs(remaining).toLocaleString()}</div>
+                <div className="text-xs text-orange-100">{remaining < 0 ? 'over budget' : 'remaining'}</div>
+              </div>
+            )}
+            {isOrganiser && pool && (
+              <a
+                href={`/api/trips/${tripId}/export/expenses`}
+                download
+                className="text-xs bg-white/20 hover:bg-white/30 text-white px-3 py-1.5 rounded-lg transition-colors"
+              >
+                Download CSV
+              </a>
+            )}
+          </div>
         </div>
       </div>
 

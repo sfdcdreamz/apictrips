@@ -18,10 +18,13 @@ export async function GET(
     return NextResponse.json({ error: 'Trip not found' }, { status: 404 })
   }
 
-  const { count } = await supabase
-    .from('members')
-    .select('*', { count: 'exact', head: true })
-    .eq('trip_id', trip.id)
+  const [{ count }, { data: vibeMembers }] = await Promise.all([
+    supabase.from('members').select('*', { count: 'exact', head: true }).eq('trip_id', trip.id),
+    supabase.from('members').select('vibe_budget, vibe_pace, vibe_style, vibe_accommodation, vibe_completed').eq('trip_id', trip.id),
+  ])
 
-  return NextResponse.json({ trip: { ...trip, member_count: count ?? 0 } })
+  return NextResponse.json({
+    trip: { ...trip, member_count: count ?? 0 },
+    existingVibeMembers: vibeMembers ?? [],
+  })
 }

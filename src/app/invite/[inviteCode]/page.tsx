@@ -4,12 +4,11 @@ import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
 import VibeCheckForm from '@/components/invite/VibeCheckForm'
 
-async function getTrip(inviteCode: string) {
+async function getTripData(inviteCode: string) {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
   const res = await fetch(`${baseUrl}/api/invite/${inviteCode}`, { cache: 'no-store' })
   if (!res.ok) return null
-  const data = await res.json()
-  return data.trip
+  return res.json()
 }
 
 export default async function InvitePage({
@@ -18,9 +17,10 @@ export default async function InvitePage({
   params: Promise<{ inviteCode: string }>
 }) {
   const { inviteCode } = await params
-  const trip = await getTrip(inviteCode)
+  const data = await getTripData(inviteCode)
 
-  if (!trip) notFound()
+  if (!data) notFound()
+  const { trip, existingVibeMembers } = data
 
   const imageUrl = await getDestinationImage(trip.destination)
 
@@ -63,7 +63,7 @@ export default async function InvitePage({
         {/* Vibe check form */}
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
           <h2 className="text-base font-semibold text-gray-900 mb-4">Join & share your travel vibe</h2>
-          <VibeCheckForm inviteCode={inviteCode} tripName={trip.name} />
+          <VibeCheckForm inviteCode={inviteCode} tripName={trip.name} existingVibeMembers={existingVibeMembers} />
         </div>
       </div>
     </div>
