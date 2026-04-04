@@ -9,9 +9,8 @@
 - ✅ #51 Emergency card — `/trips/[tripId]/emergency` page with member list + India emergency numbers; Emergency tab added to TripNav
 - ✅ #47 Live presence — `TripPresence` client component using Supabase Realtime Presence; shows "N viewing" badge when >1 viewer
 
-**DB schema changes still needed** — run ALL of these in Supabase SQL editor before testing:
+**DB schema changes still needed** — run ALL of these in Supabase SQL editor if not already applied:
 ```sql
--- From previous session (Phases 2–6)
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id);
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS upi_id text;
 CREATE INDEX IF NOT EXISTS members_user_id_idx ON public.members(user_id);
@@ -39,7 +38,6 @@ CREATE POLICY IF NOT EXISTS "Organiser manages settlements"
   ON public.settlements FOR ALL
   USING (trip_id IN (SELECT id FROM public.trips WHERE organiser_id = auth.uid()));
 
--- NEW this session (#24 anonymous budget disclosure)
 CREATE TABLE IF NOT EXISTS public.budget_disclosures (
   id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
   trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
@@ -55,7 +53,7 @@ CREATE POLICY IF NOT EXISTS "Members can upsert own disclosure"
   USING (member_email = auth.email());
 ```
 
-**Resume next:** Tier 5 #25 (Suspense streaming on dashboard) → Tier 6 (ghost member, dropout ripple) → Tier 9 (realtime).
+**Resume next:** #45 (live poll vote counts via Realtime) → #42 ("What We Agreed" timeline) → #49 (receipt photo capture) → #50 (pivot poll) → #54/#55 (AI features — need Anthropic API key in Vercel env vars).
 
 ---
 
@@ -86,41 +84,83 @@ src/
   app/
     api/                          # API routes (server-only)
       trips/[tripId]/
-        itinerary/route.ts        # POST  — create itinerary item
+        route.ts                  # PATCH — edit trip details
+        budget-disclosure/route.ts
+        digest-token/route.ts
+        export/expenses/route.ts  # GET — CSV download (organiser only)
+        itinerary/route.ts        # POST — create itinerary item
+        itinerary/generate/route.ts
         members/route.ts
+        members/me/route.ts
         polls/route.ts
         pool/route.ts
         pool/expenses/route.ts
+        pool/expenses/[expenseId]/route.ts
+        settlements/route.ts
+        settlements/[settlementId]/route.ts
       itinerary/[itemId]/route.ts # PATCH (toggle done) / DELETE
-      polls/[pollId]/route.ts     # PATCH (lock/reopen)
+      polls/[pollId]/route.ts     # PATCH (lock/reopen) / DELETE
       polls/[pollId]/vote/route.ts
-      invite/[inviteCode]/route.ts
+      invite/[inviteCode]/route.ts        # GET — returns trip + existingVibeMembers
       invite/[inviteCode]/join/route.ts
       trips/route.ts
     auth/callback/route.ts
     trips/[tripId]/
-      layout.tsx                  # Trip shell with TripNav
-      page.tsx                    # Dashboard (members, health, conflicts)
-      itinerary/page.tsx          # Itinerary — server page fetches itinerary_items
+      layout.tsx                  # Trip shell: TripNav + TripPresence + ActivityToast
+      page.tsx                    # Dashboard (organiser) — health, vibe, ghost, dropout, momentum
+      member/page.tsx             # Member self-service — RSVP, polls, itinerary read-only
+      digest/page.tsx             # Decisions Digest (organiser)
+      emergency/page.tsx          # Emergency card — members + India emergency numbers
       expenses/page.tsx
+      itinerary/page.tsx
       polls/page.tsx
       vibe-check/page.tsx
     dashboard/page.tsx
+    digest/[digestToken]/page.tsx # Public shareable digest (no auth)
     invite/[inviteCode]/page.tsx
     vote/[pollId]/page.tsx
   components/
+    budget/
+      BudgetDistributionCard.tsx  # Anonymous budget disclosure bar chart
+    expenses/
+      BudgetAlert.tsx             # ≥80% spend alert
+      ExpenseList.tsx
+      LogExpenseForm.tsx          # Optimistic UI
+      PoolSetupForm.tsx
+      SettlementLedger.tsx        # Net balances + UPI pay button
+    invite/
+      VibeCheckForm.tsx           # Join form + live Vibe Impact preview
     itinerary/
-      ItineraryClient.tsx         # Day tabs, toggle done, delete
-      AddActivityForm.tsx         # Form to add new activity
-    dashboard/  decisions/  expenses/  invite/  trips/  ui/  vote/
+      ItineraryClient.tsx         # Day tabs, optimistic toggle, delete
+      AddActivityForm.tsx
+    trips/
+      CopyInviteButton.tsx
+      EditTripForm.tsx            # Inline edit name/destination/dates (organiser)
+      TripNav.tsx                 # Tabs + LIVE badge + Emergency tab
+      TripPresence.tsx            # Supabase Realtime presence indicator
+      TripRoleContext.tsx
+    ui/
+      ActivityToast.tsx           # In-app activity notifications
+      DestinationHero.tsx
+      Skeleton.tsx
+    vote/
+      VoteForm.tsx                # Optimistic poll voting
   lib/
     supabase/
       server.ts                   # createClient() + createServiceRoleClient()
       client.ts                   # browser client
     conflict-detector.ts
     destination-image.ts
+    dropout-calculator.ts         # Dropout ripple effect
+    ghost-detector.ts             # Ghost member detection
+    hooks/
+      useOptimisticList.ts
+    momentum.ts                   # Trip momentum score
+    settlement-calculator.ts      # Debt minimization algorithm
     trip-health.ts
+    upi.ts                        # buildUpiLink() utility
     utils.ts
+    vibe-score.ts                 # Weighted 4-dimension compatibility score
   types/index.ts                  # All shared TypeScript types
 ```
 
@@ -155,13 +195,15 @@ export async function POST(
 
 | Table | Key columns |
 |-------|-------------|
-| `trips` | `id`, `organiser_id`, `invite_code`, `start_date`, `end_date` |
-| `members` | `trip_id`, `email`, `status` (in/tentative/out), vibe_* fields |
+| `trips` | `id`, `organiser_id`, `invite_code`, `start_date`, `end_date`, `digest_token` |
+| `members` | `trip_id`, `email`, `status` (in/tentative/out), `user_id`, `upi_id`, vibe_* fields |
 | `polls` | `trip_id`, `options` (text[]), `status` (open/locked), `winning_option` |
 | `votes` | `poll_id`, `member_email`, `option_chosen` |
 | `pools` | `trip_id`, `total_amount`, `currency` |
-| `expenses` | `pool_id`, `amount`, `category`, `logged_by`, `expense_date` |
+| `expenses` | `pool_id`, `amount`, `category`, `logged_by`, `paid_by`, `split_between`, `expense_date` |
 | `itinerary_items` | `trip_id`, `day_number`, `title`, `item_type`, `status` (pending/done), `cost` |
+| `settlements` | `trip_id`, `from_email`, `to_email`, `amount`, `status` (pending/confirmed), `upi_ref` |
+| `budget_disclosures` | `trip_id`, `member_email`, `budget_range` — one row per member, anonymous |
 
 All tables use `uuid_generate_v4()` PKs and have RLS enabled. Service role client bypasses RLS — use it only after verifying auth manually.
 
@@ -179,10 +221,11 @@ const [{ data: a }, { data: b }, { data: c }] = await Promise.all([
 ])
 ```
 - `getDestinationImage` makes an outbound Unsplash HTTP call — include it inside the `Promise.all`, never await it separately. Requires `UNSPLASH_ACCESS_KEY` env var; short-circuits instantly if unset.
+- Dashboard uses React Suspense streaming: `DestinationImageLoader` and `DashboardInsights` stream independently — don't block the page shell on slow fetches.
 
 ## Types (`src/types/index.ts`)
 
-All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, `Expense`, `ItineraryItem`, `TripHealth`, `ConflictResult`.
+All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, `Expense`, `ItineraryItem`, `TripHealth`, `ConflictResult`, `Settlement`.
 
 ## Module Status
 
@@ -190,10 +233,18 @@ All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, 
 |--------|----|-----|----|
 | Trips (create/dashboard) | ✅ | ✅ | ✅ |
 | Members / Invite | ✅ | ✅ | ✅ |
-| Vibe Check | ✅ | ✅ | ✅ |
+| Vibe Check + Compatibility Score | ✅ | ✅ | ✅ |
 | Polls / Voting | ✅ | ✅ | ✅ |
-| Expense Pool | ✅ | ✅ | ✅ |
-| Itinerary | ✅ | ✅ | ✅ (run schema.sql block in Supabase) |
+| Expense Pool + Settlement | ✅ | ✅ | ✅ |
+| Itinerary | ✅ | ✅ | ✅ |
+| Anonymous Budget Disclosure | ✅ | ✅ | ✅ |
+| Ghost Detection + Dropout Ripple + Momentum | ✅ | — | — |
+| Decisions Digest (public share) | ✅ | ✅ | ✅ |
+| Emergency Card | ✅ | — | — |
+| CSV Expense Export | — | ✅ | — |
+| Live Mode (LIVE badge + banner) | ✅ | — | — |
+| Live Presence (Supabase Realtime) | ✅ | — | — |
+| Invite Compatibility Preview | ✅ | ✅ | — |
 | Mobile Nav (hamburger) | ✅ | — | — |
 
 ---
@@ -261,7 +312,7 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 5 — Performance (market-beating speed)
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 25 | Suspense streaming on trip dashboard | 🔲 | `src/app/trips/[tripId]/page.tsx` |
+| 25 | Suspense streaming on trip dashboard | ✅ | `src/app/trips/[tripId]/page.tsx` — DestinationImageLoader + DashboardInsights stream independently |
 | 26 | Optimistic UI — expense logging | ✅ | `src/components/expenses/LogExpenseForm.tsx` |
 | 27 | Optimistic UI — itinerary toggle | ✅ | `src/components/itinerary/ItineraryClient.tsx` |
 | 28 | Optimistic UI — poll voting | ✅ | `src/components/vote/VoteForm.tsx` |
@@ -271,16 +322,16 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 6 — Organiser Intelligence
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 31 | Ghost member detection (alert when member disengages) | 🔲 | New logic + dashboard alert |
-| 32 | Dropout ripple effect calculator (cost/itinerary impact) | 🔲 | New: `src/lib/dropout-calculator.ts` |
-| 33 | Trip momentum score (engagement metric with nudges) | 🔲 | New: `src/lib/momentum.ts` |
+| 31 | Ghost member detection (alert when member disengages) | ✅ | `src/lib/ghost-detector.ts`, dashboard alert in `page.tsx` |
+| 32 | Dropout ripple effect calculator (cost/itinerary impact) | ✅ | `src/lib/dropout-calculator.ts`, shown on dashboard |
+| 33 | Trip momentum score (engagement metric with nudges) | ✅ | `src/lib/momentum.ts`, shown on dashboard |
 | 34 | Compatibility check before adding new member | ✅ | `src/components/invite/VibeCheckForm.tsx` + invite API |
 
 ### Tier 7 — Payments (India-first UPI)
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
 | 35 | UPI ID field on member profile | ✅ | `supabase/schema.sql` + invite form |
-| 36 | `buildUpiLink()` utility | ✅ | New: `src/lib/upi.ts` |
+| 36 | `buildUpiLink()` utility | ✅ | `src/lib/upi.ts` |
 | 37 | "Pay via UPI" button in settlement ledger | ✅ | `src/components/expenses/SettlementLedger.tsx` |
 | 38 | "I've paid" → organiser confirms flow | ✅ | Settlements API + UI |
 | 39 | Pre-commitment micro-deposit (₹200–500 to confirm attendance) | 🔲 | New flow — Razorpay/UPI |
@@ -288,8 +339,8 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 8 — Sharing & Viral Growth
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 40 | Decisions Digest page (all locked polls + itinerary + budget) | ✅ | New: `src/app/trips/[tripId]/digest/page.tsx` |
-| 41 | Public share link via `digest_token` (no auth) | ✅ | New: `src/app/digest/[digestToken]/page.tsx` |
+| 40 | Decisions Digest page (all locked polls + itinerary + budget) | ✅ | `src/app/trips/[tripId]/digest/page.tsx` |
+| 41 | Public share link via `digest_token` (no auth) | ✅ | `src/app/digest/[digestToken]/page.tsx` |
 | 42 | "What We Agreed" timeline (immutable decision log) | 🔲 | New component |
 | 43 | Trip templates (publish itinerary for others to clone) | 🔲 | New feature |
 | 44 | Referral system | 🔲 | New feature |
@@ -297,14 +348,14 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 9 — Real-Time Features
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 45 | Live poll vote counts (Supabase Realtime) | 🔲 | polls page |
-| 46 | Activity notifications (in-app toast) | 🔲 | New: notification system |
+| 45 | Live poll vote counts (Supabase Realtime) | 🔲 | `src/app/trips/[tripId]/polls/page.tsx` |
+| 46 | Activity notifications (in-app toast) | ✅ | `src/components/ui/ActivityToast.tsx`, mounted in layout |
 | 47 | Live presence (who's viewing the trip) | ✅ | `src/components/trips/TripPresence.tsx` |
 
 ### Tier 10 — Mid-Trip Mode
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 48 | Auto-switch to live mode on `start_date` | ✅ | layout or dashboard |
+| 48 | Auto-switch to live mode on `start_date` | ✅ | `src/app/trips/[tripId]/layout.tsx`, `TripNav.tsx`, dashboard `page.tsx` |
 | 49 | Receipt photo capture (Supabase Storage) | 🔲 | expense logging |
 | 50 | Pivot poll (instant re-vote mid-trip) | 🔲 | polls |
 | 51 | Emergency card (hospital, embassy, member contacts) | ✅ | `src/app/trips/[tripId]/emergency/page.tsx` |
@@ -313,7 +364,7 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 11 — AI Features
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 53 | AI itinerary generator (destination + vibe → draft plan) | 🔲 | Claude API integration |
+| 53 | AI itinerary generator (destination + vibe → draft plan) | 🔲 | `src/app/api/trips/[tripId]/itinerary/generate/route.ts` exists — needs `ANTHROPIC_API_KEY` in Vercel |
 | 54 | AI conflict resolver (personalised compromise suggestions) | 🔲 | Claude API integration |
 | 55 | Smart budget estimator (destination + group + vibe → range) | 🔲 | Claude API integration |
 
@@ -335,6 +386,14 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 
 ---
 
+## Progress Summary
+
+**48 / 63 items complete (76%)**
+
+Remaining high-value items: #45 (live poll counts), #42 (agreement timeline), #49 (receipt capture), #50 (pivot poll), #52 (vendor contacts), #53–55 (AI — needs `ANTHROPIC_API_KEY`), #56–60 (post-trip), #61–63 (monetisation).
+
+---
+
 ## USPs vs Competitors
 
 | Competitor | Gap APIcTrips fills |
@@ -352,3 +411,5 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 - Trip momentum score
 - Pre-commitment micro-deposit to prevent flaking
 - Decisions Digest shareable link
+- Live presence indicator
+- Emergency card with member contacts
