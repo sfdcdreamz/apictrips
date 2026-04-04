@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useOptimistic, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import AddActivityForm from './AddActivityForm'
 import type { ItineraryItem } from '@/types'
@@ -25,23 +25,34 @@ interface Props {
 
 export default function ItineraryClient({ tripId, days, items }: Props) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [selectedDay, setSelectedDay] = useState(days[0]?.dayNumber || 1)
   const [showAddForm, setShowAddForm] = useState(false)
 
-  const dayItems = items
+  const [optimisticItems, updateOptimistic] = useOptimistic(
+    items,
+    (state: ItineraryItem[], { id, status }: { id: string; status: 'pending' | 'done' }) =>
+      state.map((i) => (i.id === id ? { ...i, status } : i))
+  )
+
+  const dayItems = optimisticItems
     .filter((i) => i.day_number === selectedDay)
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
 
   const daySpend = dayItems.reduce((s, i) => s + i.cost, 0)
   const completedCount = dayItems.filter((i) => i.status === 'done').length
 
-  async function toggleStatus(item: ItineraryItem) {
-    await fetch(`/api/itinerary/${item.id}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: item.status === 'done' ? 'pending' : 'done' }),
+  function toggleStatus(item: ItineraryItem) {
+    const newStatus = item.status === 'done' ? 'pending' : 'done'
+    startTransition(async () => {
+      updateOptimistic({ id: item.id, status: newStatus })
+      await fetch(`/api/itinerary/${item.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      router.refresh()
     })
-    router.refresh()
   }
 
   async function deleteItem(itemId: string) {

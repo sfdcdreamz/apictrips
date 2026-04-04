@@ -8,6 +8,7 @@ import { formatDateRange, buildInviteUrl, getInitials, getAvatarColor } from '@/
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
 import CopyInviteButton from '@/components/trips/CopyInviteButton'
+import EditTripForm from '@/components/trips/EditTripForm'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
 
 async function getTripData(tripId: string) {
@@ -136,6 +137,17 @@ export default async function TripDashboardPage({
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Edit trip details (organiser only) */}
+      <div className="flex justify-end px-1">
+        <EditTripForm
+          tripId={tripId}
+          initialName={trip.name}
+          initialDestination={trip.destination}
+          initialStartDate={trip.start_date}
+          initialEndDate={trip.end_date}
+        />
       </div>
 
       {/* Members row */}

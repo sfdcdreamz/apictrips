@@ -1,8 +1,8 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useOptimistic, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
-import type { ExpenseCategory, Member } from '@/types'
+import type { ExpenseCategory, Member, Expense } from '@/types'
 
 const CATEGORIES: ExpenseCategory[] = ['Flights', 'Stay', 'Food', 'Transport', 'Experiences', 'Misc']
 
@@ -13,6 +13,7 @@ interface Props {
 
 export default function LogExpenseForm({ tripId, members = [] }: Props) {
   const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const [showForm, setShowForm] = useState(false)
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>('Misc')
@@ -21,51 +22,85 @@ export default function LogExpenseForm({ tripId, members = [] }: Props) {
   const [paidBy, setPaidBy] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
+
+  // Optimistic pending rows shown while the API call is in flight
+  const [optimisticRows, addOptimisticRow] = useOptimistic(
+    [] as Expense[],
+    (state: Expense[], row: Expense) => [...state, row]
+  )
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError('')
-    setLoading(true)
 
-    const res = await fetch(`/api/trips/${tripId}/pool/expenses`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        amount: parseFloat(amount),
-        category,
-        description,
-        logged_by: loggedBy,
-        expense_date: date,
-        paid_by: paidBy || null,
-      }),
-    })
-
-    const data = await res.json()
-    setLoading(false)
-
-    if (!res.ok) {
-      setError(data.error || 'Something went wrong')
-      return
+    const optimistic: Expense = {
+      id: `temp-${Date.now()}`,
+      pool_id: '',
+      amount: parseFloat(amount),
+      category,
+      description,
+      logged_by: loggedBy,
+      expense_date: date,
+      created_at: new Date().toISOString(),
+      paid_by: paidBy || null,
     }
 
-    setAmount('')
-    setDescription('')
-    setLoggedBy('')
-    setPaidBy('')
-    setDate(new Date().toISOString().split('T')[0])
-    setShowForm(false)
-    router.refresh()
+    startTransition(async () => {
+      addOptimisticRow(optimistic)
+
+      const res = await fetch(`/api/trips/${tripId}/pool/expenses`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          amount: parseFloat(amount),
+          category,
+          description,
+          logged_by: loggedBy,
+          expense_date: date,
+          paid_by: paidBy || null,
+        }),
+      })
+
+      if (!res.ok) {
+        const data = await res.json()
+        setError(data.error || 'Something went wrong')
+        return
+      }
+
+      setAmount('')
+      setDescription('')
+      setLoggedBy('')
+      setPaidBy('')
+      setDate(new Date().toISOString().split('T')[0])
+      setShowForm(false)
+      router.refresh()
+    })
   }
+
+  const loading = isPending
 
   if (!showForm) {
     return (
-      <button
-        onClick={() => setShowForm(true)}
-        className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-colors"
-      >
-        + Log expense
-      </button>
+      <div className="space-y-2">
+        {optimisticRows.map((row) => (
+          <div key={row.id} className="flex items-center justify-between bg-violet-50 border border-violet-100 rounded-xl px-4 py-3 opacity-70">
+            <div>
+              <p className="text-sm font-medium text-gray-700">{row.description}</p>
+              <p className="text-xs text-gray-400">{row.logged_by} · {row.category}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm font-semibold text-gray-700">₹{row.amount.toLocaleString()}</p>
+              <p className="text-xs text-violet-500">Saving…</p>
+            </div>
+          </div>
+        ))}
+        <button
+          onClick={() => setShowForm(true)}
+          className="w-full py-2.5 border-2 border-dashed border-gray-200 rounded-xl text-sm text-gray-400 hover:border-violet-300 hover:text-violet-600 transition-colors"
+        >
+          + Log expense
+        </button>
+      </div>
     )
   }
 

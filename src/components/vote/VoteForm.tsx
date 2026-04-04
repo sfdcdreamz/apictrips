@@ -11,11 +11,10 @@ interface Props {
 }
 
 export default function VoteForm({ pollId, question, options, deadline }: Props) {
-  const [step, setStep] = useState<'form' | 'success' | 'error'>('form')
+  const [step, setStep] = useState<'form' | 'submitting' | 'success' | 'error'>('form')
   const [email, setEmail] = useState('')
   const [chosen, setChosen] = useState('')
   const [errorMsg, setErrorMsg] = useState('')
-  const [loading, setLoading] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -24,7 +23,8 @@ export default function VoteForm({ pollId, question, options, deadline }: Props)
       return
     }
     setErrorMsg('')
-    setLoading(true)
+    // Optimistically move to submitting state — choice already shown highlighted
+    setStep('submitting')
 
     const res = await fetch(`/api/polls/${pollId}/vote`, {
       method: 'POST',
@@ -33,9 +33,9 @@ export default function VoteForm({ pollId, question, options, deadline }: Props)
     })
 
     const data = await res.json()
-    setLoading(false)
 
     if (!res.ok) {
+      setStep('form')
       setErrorMsg(data.error || 'Something went wrong')
       if (res.status === 409) setStep('error')
       return
@@ -43,6 +43,8 @@ export default function VoteForm({ pollId, question, options, deadline }: Props)
 
     setStep('success')
   }
+
+  const loading = step === 'submitting'
 
   if (step === 'success') {
     return (

@@ -71,6 +71,7 @@ export default function VibeCheckForm({ inviteCode, tripName }: Props) {
   const [pace, setPace] = useState<VibePace | ''>('')
   const [style, setStyle] = useState<VibeStyle | ''>('')
   const [accommodation, setAccommodation] = useState<VibeAccommodation | ''>('')
+  const [upiId, setUpiId] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -90,6 +91,7 @@ export default function VibeCheckForm({ inviteCode, tripName }: Props) {
         vibe_pace: pace || null,
         vibe_style: style || null,
         vibe_accommodation: accommodation || null,
+        upi_id: upiId.trim() || null,
       }),
     })
 
@@ -140,6 +142,16 @@ export default function VibeCheckForm({ inviteCode, tripName }: Props) {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">UPI ID <span className="text-gray-400 font-normal">(optional — for expense settlements)</span></label>
+          <input
+            type="text"
+            value={upiId}
+            onChange={(e) => setUpiId(e.target.value)}
+            placeholder="yourname@upi"
             className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
           />
         </div>

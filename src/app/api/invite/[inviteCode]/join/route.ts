@@ -35,7 +35,7 @@ export async function POST(
   }
 
   const body = await request.json()
-  const { name, email, status, vibe_budget, vibe_pace, vibe_style, vibe_accommodation } = body
+  const { name, email, status, vibe_budget, vibe_pace, vibe_style, vibe_accommodation, upi_id } = body
 
   if (!name) {
     return NextResponse.json({ error: 'Name is required' }, { status: 400 })
@@ -62,6 +62,7 @@ export async function POST(
       vibe_accommodation: vibe_accommodation || null,
       vibe_completed: vibeCompleted,
       user_id: authUserId || null,
+      upi_id: upi_id || null,
     })
     .select()
     .single()
