@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
+import TripRatingForm from '@/components/trips/TripRatingForm'
 import { formatDateRange, formatDate } from '@/lib/utils'
 import type { Poll, Expense, ItineraryItem, Member, ExpenseCategory } from '@/types'
 import { differenceInDays, parseISO } from 'date-fns'
@@ -41,6 +42,7 @@ async function getRecapData(tripId: string) {
     { data: itinerary },
     { data: members },
     { data: settlements },
+    { data: ratings },
     imageUrl,
   ] = await Promise.all([
     serviceSupabase.from('polls').select('*').eq('trip_id', tripId).order('created_at'),
@@ -48,8 +50,12 @@ async function getRecapData(tripId: string) {
     serviceSupabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_number').order('time'),
     serviceSupabase.from('members').select('name, email, status, vibe_completed').eq('trip_id', tripId),
     serviceSupabase.from('settlements').select('*').eq('trip_id', tripId),
+    serviceSupabase.from('trip_ratings').select('*').eq('trip_id', tripId),
     getDestinationImage(trip.destination),
   ])
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const myRating = (ratings || []).find((r: any) => r.member_email === user.email) || null
 
   return {
     trip,
@@ -58,8 +64,12 @@ async function getRecapData(tripId: string) {
     itinerary: (itinerary || []) as ItineraryItem[],
     members: (members || []) as Pick<Member, 'name' | 'email' | 'status' | 'vibe_completed'>[],
     settlements: settlements || [],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    ratings: (ratings || []) as any[],
+    myRating,
     imageUrl: imageUrl || '',
     isOrganiser,
+    currentUserEmail: user.email || '',
   }
 }
 
@@ -72,7 +82,7 @@ export default async function RecapPage({
   const data = await getRecapData(tripId)
   if (!data) notFound()
 
-  const { trip, polls, pool, itinerary, members, settlements, imageUrl, isOrganiser } = data
+  const { trip, polls, pool, itinerary, members, settlements, ratings, myRating, imageUrl, isOrganiser } = data
 
   const isPostTrip = new Date() > new Date(trip.end_date)
   const tripDays = Math.max(1, differenceInDays(parseISO(trip.end_date), parseISO(trip.start_date)) + 1)
@@ -287,6 +297,20 @@ export default async function RecapPage({
             <p className="text-xs text-gray-400 mt-2">
               Based on RSVPs, vibe check participation, and poll engagement.
             </p>
+          </div>
+
+          {/* Trip ratings */}
+          <div className="bg-white rounded-2xl border border-stone-100 p-5">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-gray-700">⭐ Rate this trip</h2>
+              {ratings.length > 0 && (
+                <span className="text-xs text-gray-400">
+                  {ratings.length} rating{ratings.length !== 1 ? 's' : ''}
+                  {' · '}avg {(ratings.reduce((s: number, r: { overall: number }) => s + r.overall, 0) / ratings.length).toFixed(1)}★
+                </span>
+              )}
+            </div>
+            <TripRatingForm tripId={tripId} existingRating={myRating} />
           </div>
 
           {/* Quick actions */}
