@@ -27,14 +27,17 @@ export default async function DashboardPage() {
   return (
     <div className="min-h-screen bg-[#faf8f4]">
       <nav className="bg-white border-b border-stone-100 px-4 py-3">
-        <div className="max-w-2xl mx-auto flex items-center justify-between">
-          <span className="text-lg font-bold text-gray-900">APIcTrips</span>
-          <Link
-            href="/trips/new"
-            className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
-          >
-            + New trip
-          </Link>
+        <div className="max-w-2xl mx-auto grid grid-cols-3 items-center">
+          <span />
+          <span className="text-lg font-bold text-gray-900 text-center">APIcTrips</span>
+          <div className="flex justify-end">
+            <Link
+              href="/trips/new"
+              className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+            >
+              + New trip
+            </Link>
+          </div>
         </div>
       </nav>
 
