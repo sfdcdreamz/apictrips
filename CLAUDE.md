@@ -1,5 +1,49 @@
 @AGENTS.md
 
+## Last Session Note (2026-04-05, Session 9)
+
+**Completed this session:**
+- ✅ Resend domain verification — added SPF, DKIM, DMARC TXT records to Hostinger hPanel for `apictrips.in`
+- ✅ No code changes — `src/lib/email.ts` already uses `noreply@apictrips.in` (set in Session 8)
+
+**Pending (manual):**
+- Verify domain status in Resend → Domains → `apictrips.in` (should show ✅ Verified within 30 min)
+- Send test email via Resend dashboard once verified
+
+**No new DB migrations needed.**
+**No new env vars needed.**
+
+---
+
+## Last Session Note (2026-04-05, Session 8)
+
+**Completed this session:**
+- ✅ Created `PRD2.md` — updated PRD v2.0 (95% built, all sections revised, PRD.md untouched)
+- ✅ Last Chance Nudge cron — `src/app/api/cron/nudge/route.ts` (every 30 min; emails non-voters 2hrs before poll closes)
+- ✅ Today's Plan cron — `src/app/api/cron/daily-plan/route.ts` (daily 2am UTC = ~7:30am IST; emails LIVE trip members)
+- ✅ `src/lib/email.ts` — `sendEmail()` wrapper around Resend SDK
+- ✅ `vercel.json` — cron schedule config
+
+**New env vars needed (add in Vercel + `.env.local`):**
+- `RESEND_API_KEY` — from resend.com (free tier: 100 emails/day)
+- `CRON_SECRET` — any random string; Vercel sends this automatically as `Authorization: Bearer $CRON_SECRET` when invoking cron routes
+- `NEXT_PUBLIC_APP_URL` — e.g., `https://apictrips.vercel.app` (used in vote links in nudge emails)
+
+**Cron routes:** Both routes require `Authorization: Bearer $CRON_SECRET` header. Vercel sets this automatically for scheduled invocations.
+
+**No new DB migrations needed.**
+
+---
+
+## Last Session Note (2026-04-05, Session 7)
+
+**Completed this session — hotfix:**
+- ✅ Fix expenses page 404 — decoupled `amnesty_votes` SELECT from expenses page query; `AmnestyVoteCard` now self-loads via `GET /api/trips/[tripId]/amnesty` on mount; DB migration (`amnesty_votes` column) applied to production
+
+**No new DB migrations needed.**
+
+---
+
 ## Last Session Note (2026-04-05, Session 6)
 
 **Completed this session — all 10 non-AI remaining features:**
