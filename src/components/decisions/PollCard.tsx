@@ -125,7 +125,7 @@ export default function PollCard({ poll, tripId, waitingFor, isOrganiser = true 
         )}
         {!isOrganiser && !isLocked && (
           <Link
-            href={`/vote/${poll.id}`}
+            href={`/vote/${poll.id}?next=/trips/${tripId}/member`}
             className="flex-1 py-1.5 text-xs text-center bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
           >
             Cast your vote →

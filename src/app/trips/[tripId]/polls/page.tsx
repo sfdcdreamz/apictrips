@@ -10,7 +10,9 @@ async function getPollsData(tripId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: trip } = await supabase
+  const serviceSupabase = createServiceRoleClient()
+
+  const { data: trip } = await serviceSupabase
     .from('trips')
     .select('id, start_date, end_date, organiser_id')
     .eq('id', tripId)
@@ -20,7 +22,7 @@ async function getPollsData(tripId: string) {
   const isOrganiser = trip.organiser_id === user.id
 
   if (!isOrganiser) {
-    const { data: member } = await supabase
+    const { data: member } = await serviceSupabase
       .from('members')
       .select('id')
       .eq('trip_id', tripId)
@@ -31,8 +33,6 @@ async function getPollsData(tripId: string) {
 
   const today = new Date().toISOString().split('T')[0]
   const isLive = !!(trip.start_date && trip.end_date && today >= trip.start_date && today <= trip.end_date)
-
-  const serviceSupabase = createServiceRoleClient()
 
   // Auto-lock overdue polls (organiser only)
   if (isOrganiser) {
@@ -78,7 +78,7 @@ async function getPollsData(tripId: string) {
     .eq('trip_id', tripId)
     .order('created_at', { ascending: false })
 
-  const { data: members } = await supabase
+  const { data: members } = await serviceSupabase
     .from('members')
     .select('name, email')
     .eq('trip_id', tripId)
@@ -120,13 +120,11 @@ export default async function PollsPage({
         </div>
       )}
 
-      {/* Create poll — organiser only */}
-      {isOrganiser && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-4">Create a poll</h2>
-          <CreatePollForm tripId={tripId} />
-        </div>
-      )}
+      {/* Create poll — organiser and members */}
+      <div className="bg-white rounded-2xl border border-stone-100 p-5">
+        <h2 className="text-sm font-semibold text-gray-700 mb-4">Create a poll</h2>
+        <CreatePollForm tripId={tripId} />
+      </div>
 
       {/* Polls list — with Supabase Realtime vote counts */}
       <PollsRealtimeWrapper

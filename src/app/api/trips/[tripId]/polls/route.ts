@@ -74,13 +74,24 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
-  const { data: trip } = await supabase
+  const serviceSupabase = createServiceRoleClient()
+  const { data: trip } = await serviceSupabase
     .from('trips')
-    .select('id')
+    .select('id, organiser_id')
     .eq('id', tripId)
-    .eq('organiser_id', user.id)
     .single()
   if (!trip) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const isOrganiser = trip.organiser_id === user.id
+  if (!isOrganiser) {
+    const { data: member } = await serviceSupabase
+      .from('members')
+      .select('id')
+      .eq('trip_id', tripId)
+      .eq('email', user.email!)
+      .single()
+    if (!member) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+  }
 
   const body = await request.json()
   const { question, options, deadline } = body
@@ -99,7 +110,7 @@ export async function POST(
     return NextResponse.json({ error: 'Deadline is required' }, { status: 400 })
   }
 
-  const { data: poll, error } = await supabase
+  const { data: poll, error } = await serviceSupabase
     .from('polls')
     .insert({
       trip_id: tripId,

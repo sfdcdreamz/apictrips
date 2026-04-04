@@ -1,8 +1,9 @@
 import { notFound } from 'next/navigation'
+import Link from 'next/link'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import MemberDashboardClient from '@/components/trips/MemberDashboardClient'
 import BudgetDisclosureCard from '@/components/budget/BudgetDisclosureCard'
-import type { Member, PollWithVotes, ItineraryItem } from '@/types'
+import type { Member } from '@/types'
 
 async function getMemberData(tripId: string) {
   const supabase = await createClient()
@@ -19,17 +20,27 @@ async function getMemberData(tripId: string) {
   if (!trip) return null
   if (!member) return null
 
-  const [{ data: polls }, { data: iItems }, { data: disclosure }] = await Promise.all([
-    serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
-    serviceSupabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_number').order('time'),
+  const [
+    { data: openPolls },
+    { data: iItems },
+    { data: disclosure },
+    { data: vendors },
+    { data: pool },
+  ] = await Promise.all([
+    serviceSupabase.from('polls').select('id').eq('trip_id', tripId).eq('status', 'open'),
+    serviceSupabase.from('itinerary_items').select('id').eq('trip_id', tripId),
     serviceSupabase.from('budget_disclosures').select('id').eq('trip_id', tripId).eq('member_email', user.email!).single(),
+    serviceSupabase.from('vendor_contacts').select('id').eq('trip_id', tripId),
+    serviceSupabase.from('pools').select('id, total_amount, currency').eq('trip_id', tripId).single(),
   ])
 
   return {
     trip,
     member: member as Member,
-    polls: (polls || []) as PollWithVotes[],
-    itinerary: (iItems || []) as ItineraryItem[],
+    openPollCount: openPolls?.length ?? 0,
+    itineraryCount: iItems?.length ?? 0,
+    vendorCount: vendors?.length ?? 0,
+    pool: pool ?? null,
     alreadyDisclosed: !!disclosure,
   }
 }
@@ -43,20 +54,96 @@ export default async function MemberPage({
   const data = await getMemberData(tripId)
   if (!data) notFound()
 
-  const { trip, member, polls, itinerary, alreadyDisclosed } = data
-  const lockedPolls = polls.filter((p) => p.status === 'locked')
-  const openPolls = polls.filter((p) => p.status === 'open')
+  const { trip, member, openPollCount, itineraryCount, vendorCount, pool, alreadyDisclosed } = data
+
+  const today = new Date()
+  const startDate = new Date(trip.start_date)
+  const endDate = new Date(trip.end_date)
+  const daysUntil = Math.ceil((startDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const isLive = today >= startDate && today <= endDate
+
+  const startFormatted = startDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })
+  const endFormatted = endDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })
+  const currencySymbol = pool?.currency === 'INR' ? '₹' : (pool?.currency || '')
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6 space-y-4">
       {/* Hero */}
-      <div className="bg-white rounded-2xl border border-stone-100 p-5">
-        <h1 className="text-xl font-bold text-gray-900">{trip.name}</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          📍 {trip.destination} · 📅 {new Date(trip.start_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric' })}
-          {' – '}
-          {new Date(trip.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
+      <div className="bg-gradient-to-br from-sky-500 to-indigo-600 rounded-2xl p-6 text-white shadow-sm">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h1 className="text-2xl font-bold leading-tight">{trip.name}</h1>
+            <p className="text-sky-100 text-sm mt-1.5">
+              📍 {trip.destination} · {startFormatted} – {endFormatted}
+            </p>
+          </div>
+          {isLive ? (
+            <span className="shrink-0 bg-red-500 text-white text-xs font-bold px-3 py-1 rounded-full animate-pulse">
+              LIVE
+            </span>
+          ) : daysUntil > 0 ? (
+            <span className="shrink-0 bg-white/20 text-white text-xs font-semibold px-3 py-1.5 rounded-full">
+              {daysUntil}d away
+            </span>
+          ) : null}
+        </div>
+        <p className="text-sky-100 text-sm mt-2">
+          Hi {member.name.split(' ')[0]} 👋 · Status:{' '}
+          <span className={`font-semibold ${member.status === 'in' ? 'text-emerald-300' : member.status === 'out' ? 'text-red-300' : 'text-amber-300'}`}>
+            {member.status === 'in' ? "I'm in" : member.status === 'out' ? "I'm out" : 'Tentative'}
+          </span>
         </p>
+      </div>
+
+      {/* Quick-action grid */}
+      <div className="grid grid-cols-2 gap-3">
+        <Link
+          href={`/trips/${tripId}/polls`}
+          className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 flex flex-col gap-1 hover:border-emerald-300 transition-colors"
+        >
+          <span className="text-2xl">🗳️</span>
+          <p className="text-base font-semibold text-gray-800">Polls</p>
+          <p className="text-xs text-gray-500">
+            {openPollCount > 0 ? (
+              <span className="text-amber-600 font-medium">{openPollCount} awaiting vote</span>
+            ) : (
+              'No open polls'
+            )}
+          </p>
+        </Link>
+
+        <Link
+          href={`/trips/${tripId}/itinerary`}
+          className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 flex flex-col gap-1 hover:border-blue-300 transition-colors"
+        >
+          <span className="text-2xl">📋</span>
+          <p className="text-base font-semibold text-gray-800">Itinerary</p>
+          <p className="text-xs text-gray-500">
+            {itineraryCount > 0 ? `${itineraryCount} item${itineraryCount !== 1 ? 's' : ''}` : 'Not planned yet'}
+          </p>
+        </Link>
+
+        <Link
+          href={`/trips/${tripId}/expenses`}
+          className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 flex flex-col gap-1 hover:border-orange-300 transition-colors"
+        >
+          <span className="text-2xl">💸</span>
+          <p className="text-base font-semibold text-gray-800">Expenses</p>
+          <p className="text-xs text-gray-500">
+            {pool ? `${currencySymbol}${pool.total_amount.toLocaleString()} pool` : 'Pool not set up'}
+          </p>
+        </Link>
+
+        <Link
+          href={`/trips/${tripId}/vendors`}
+          className="bg-white rounded-2xl border border-stone-100 shadow-sm p-4 flex flex-col gap-1 hover:border-teal-300 transition-colors"
+        >
+          <span className="text-2xl">📞</span>
+          <p className="text-base font-semibold text-gray-800">Vendors</p>
+          <p className="text-xs text-gray-500">
+            {vendorCount > 0 ? `${vendorCount} contact${vendorCount !== 1 ? 's' : ''}` : 'No contacts yet'}
+          </p>
+        </Link>
       </div>
 
       {/* Anonymous budget disclosure */}
@@ -69,67 +156,6 @@ export default async function MemberPage({
         initialUpiId={member.upi_id || ''}
         memberName={member.name}
       />
-
-      {/* Open polls */}
-      {openPolls.length > 0 && (
-        <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5">
-          <h2 className="text-sm font-semibold text-amber-800 mb-3">Polls awaiting your vote</h2>
-          <div className="space-y-2">
-            {openPolls.map((p) => (
-              <a
-                key={p.id}
-                href={`/vote/${p.id}`}
-                className="block bg-white border border-amber-100 rounded-xl px-4 py-3 hover:border-amber-300 transition-colors"
-              >
-                <p className="text-sm font-medium text-gray-800">{p.question}</p>
-                <p className="text-xs text-amber-600 mt-0.5">
-                  Deadline: {new Date(p.deadline).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
-                </p>
-              </a>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Locked decisions */}
-      {lockedPolls.length > 0 && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Decisions</h2>
-          <div className="space-y-2">
-            {lockedPolls.map((p) => (
-              <div key={p.id} className="flex items-start justify-between gap-3">
-                <p className="text-sm text-gray-600">{p.question}</p>
-                <span className="text-sm font-semibold text-emerald-700 shrink-0">{p.winning_option}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Itinerary read-only */}
-      {itinerary.length > 0 && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Itinerary</h2>
-          <div className="space-y-3">
-            {Array.from(new Set(itinerary.map((i) => i.day_number))).map((day) => (
-              <div key={day}>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1.5">Day {day}</p>
-                <div className="space-y-1.5 pl-2">
-                  {itinerary.filter((i) => i.day_number === day).map((item) => (
-                    <div key={item.id} className="flex items-center gap-2">
-                      <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${item.status === 'done' ? 'bg-emerald-400' : 'bg-gray-300'}`} />
-                      <p className={`text-sm ${item.status === 'done' ? 'line-through text-gray-400' : 'text-gray-700'}`}>
-                        {item.title}
-                        {item.time && <span className="text-xs text-gray-400 ml-1">· {item.time}</span>}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   )
 }

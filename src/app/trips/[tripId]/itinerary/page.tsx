@@ -22,7 +22,9 @@ async function getItineraryData(tripId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: trip } = await supabase
+  const serviceSupabase = createServiceRoleClient()
+
+  const { data: trip } = await serviceSupabase
     .from('trips')
     .select('id, name, start_date, end_date, organiser_id')
     .eq('id', tripId)
@@ -32,7 +34,7 @@ async function getItineraryData(tripId: string) {
   const isOrganiser = trip.organiser_id === user.id
 
   if (!isOrganiser) {
-    const { data: member } = await supabase
+    const { data: member } = await serviceSupabase
       .from('members')
       .select('id')
       .eq('trip_id', tripId)
@@ -40,8 +42,6 @@ async function getItineraryData(tripId: string) {
       .single()
     if (!member) return null
   }
-
-  const serviceSupabase = createServiceRoleClient()
   const { data: items } = await serviceSupabase
     .from('itinerary_items')
     .select('*')

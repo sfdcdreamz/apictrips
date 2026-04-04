@@ -21,15 +21,14 @@ async function getExpensesData(tripId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: trip } = await supabase
+  const serviceSupabase = createServiceRoleClient()
+
+  const { data: trip } = await serviceSupabase
     .from('trips')
     .select('id, group_size, organiser_id')
     .eq('id', tripId)
     .single()
   if (!trip) return null
-
-  // Allow organisers and members (non-organisers checked via layout)
-  const serviceSupabase = createServiceRoleClient()
 
   const [{ data: pool }, { data: members }, { data: settlements }] = await Promise.all([
     serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),

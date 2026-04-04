@@ -21,7 +21,7 @@ async function getVendorData(tripId: string) {
   const serviceSupabase = createServiceRoleClient()
 
   const [{ data: trip }, { data: vendors }] = await Promise.all([
-    supabase.from('trips').select('id, organiser_id').eq('id', tripId).single(),
+    serviceSupabase.from('trips').select('id, organiser_id').eq('id', tripId).single(),
     serviceSupabase.from('vendor_contacts').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
   ])
 

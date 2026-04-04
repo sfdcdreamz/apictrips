@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation'
-import { createServiceRoleClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import VoteForm from '@/components/vote/VoteForm'
 import type { PollWithVotes } from '@/types'
 
@@ -38,13 +38,23 @@ async function getPollForVoting(pollId: string): Promise<PollWithVotes | null> {
 
 export default async function VotePage({
   params,
+  searchParams,
 }: {
   params: Promise<{ pollId: string }>
+  searchParams: Promise<{ next?: string }>
 }) {
-  const { pollId } = await params
-  const poll = await getPollForVoting(pollId)
+  const [{ pollId }, sp] = await Promise.all([params, searchParams])
+  const supabase = await createClient()
+
+  const [poll, { data: { user } }] = await Promise.all([
+    getPollForVoting(pollId),
+    supabase.auth.getUser(),
+  ])
 
   if (!poll) notFound()
+
+  const redirectTo = sp.next || ''
+  const userEmail = user?.email ?? ''
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -57,7 +67,7 @@ export default async function VotePage({
       <div className="max-w-md mx-auto px-4 py-8">
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
           <div className="mb-6">
-            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Group Poll</span>
+            <span className="text-xs font-semibold text-emerald-600 uppercase tracking-wide">Group Poll · {poll.votes.length} vote{poll.votes.length !== 1 ? 's' : ''} so far</span>
             <h1 className="text-xl font-bold text-gray-900 mt-1">{poll.question}</h1>
           </div>
 
@@ -88,6 +98,11 @@ export default async function VotePage({
                   )
                 })}
               </div>
+              {redirectTo && (
+                <a href={redirectTo} className="block text-center text-sm text-emerald-600 font-medium mt-2 hover:underline">
+                  ← Back to your trip
+                </a>
+              )}
             </div>
           ) : (
             <VoteForm
@@ -95,6 +110,8 @@ export default async function VotePage({
               question={poll.question}
               options={poll.options as string[]}
               deadline={poll.deadline}
+              initialEmail={userEmail}
+              redirectTo={redirectTo}
             />
           )}
         </div>
