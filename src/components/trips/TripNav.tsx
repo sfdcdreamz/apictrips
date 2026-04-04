@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { usePathname } from 'next/navigation'
 import Link from 'next/link'
 import { getInitials, getAvatarColor } from '@/lib/utils'
+import { useTripRole } from './TripRoleContext'
 
 interface Props {
   tripId: string
@@ -15,10 +16,11 @@ interface Props {
 export default function TripNav({ tripId, tripName: _tripName, isLive, members }: Props) {
   const pathname = usePathname()
   const [open, setOpen] = useState(false)
+  const { isOrganiser } = useTripRole()
 
   useEffect(() => setOpen(false), [pathname])
 
-  const tabs = [
+  const organiserTabs = [
     { label: 'Dashboard', href: `/trips/${tripId}` },
     { label: 'Polls', href: `/trips/${tripId}/polls` },
     { label: 'Expenses', href: `/trips/${tripId}/expenses` },
@@ -30,10 +32,21 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
     { label: 'Vendors', href: `/trips/${tripId}/vendors` },
   ]
 
+  const memberTabs = [
+    { label: 'My Trip',   href: `/trips/${tripId}/member` },
+    { label: 'Polls',     href: `/trips/${tripId}/polls` },
+    { label: 'Itinerary', href: `/trips/${tripId}/itinerary` },
+    { label: 'Expenses',  href: `/trips/${tripId}/expenses` },
+    { label: 'Timeline',  href: `/trips/${tripId}/timeline` },
+    { label: 'Emergency', href: `/trips/${tripId}/emergency` },
+    { label: 'Vendors',   href: `/trips/${tripId}/vendors` },
+  ]
+
+  const tabs = isOrganiser ? organiserTabs : memberTabs
+
   function isActive(href: string) {
-    if (href === `/trips/${tripId}`) {
-      return pathname === `/trips/${tripId}`
-    }
+    if (href === `/trips/${tripId}/member`) return pathname === href || pathname === `/trips/${tripId}`
+    if (href === `/trips/${tripId}`) return pathname === `/trips/${tripId}`
     return pathname.startsWith(href)
   }
 

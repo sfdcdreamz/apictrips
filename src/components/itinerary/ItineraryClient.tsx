@@ -22,9 +22,10 @@ interface Props {
   tripId: string
   days: Day[]
   items: ItineraryItem[]
+  isOrganiser?: boolean
 }
 
-export default function ItineraryClient({ tripId, days, items }: Props) {
+export default function ItineraryClient({ tripId, days, items, isOrganiser = true }: Props) {
   const router = useRouter()
   const [isPending, startTransition] = useTransition()
   const [selectedDay, setSelectedDay] = useState(days[0]?.dayNumber || 1)
@@ -72,10 +73,12 @@ export default function ItineraryClient({ tripId, days, items }: Props) {
 
   return (
     <div className="space-y-4">
-      {/* AI generate button */}
-      <div className="flex justify-end">
-        <GenerateItineraryButton tripId={tripId} hasItems={items.length > 0} />
-      </div>
+      {/* AI generate button — organiser only */}
+      {isOrganiser && (
+        <div className="flex justify-end">
+          <GenerateItineraryButton tripId={tripId} hasItems={items.length > 0} />
+        </div>
+      )}
 
       {/* Day tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
@@ -132,44 +135,48 @@ export default function ItineraryClient({ tripId, days, items }: Props) {
                 {item.description && (
                   <p className="text-xs text-gray-400 mt-0.5">{item.description}</p>
                 )}
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    onClick={() => toggleStatus(item)}
-                    className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
-                      item.status === 'done'
-                        ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                        : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                    }`}
-                  >
-                    {item.status === 'done' ? 'Mark pending' : 'Mark done'}
-                  </button>
-                  <button
-                    onClick={() => deleteItem(item.id)}
-                    className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                  >
-                    Remove
-                  </button>
-                </div>
+                {isOrganiser && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <button
+                      onClick={() => toggleStatus(item)}
+                      className={`text-xs px-3 py-1 rounded-full font-medium transition-colors ${
+                        item.status === 'done'
+                          ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                          : 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                      }`}
+                    >
+                      {item.status === 'done' ? 'Mark pending' : 'Mark done'}
+                    </button>
+                    <button
+                      onClick={() => deleteItem(item.id)}
+                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                    >
+                      Remove
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
         ))}
       </div>
 
-      {/* Add form or button */}
-      {showAddForm ? (
-        <AddActivityForm
-          tripId={tripId}
-          dayNumber={selectedDay}
-          onDone={() => { setShowAddForm(false); router.refresh() }}
-        />
-      ) : (
-        <button
-          onClick={() => setShowAddForm(true)}
-          className="w-full bg-white border border-dashed border-emerald-300 rounded-xl p-3 text-sm text-emerald-600 font-medium hover:bg-emerald-50 transition-colors"
-        >
-          + Add activity for Day {selectedDay}
-        </button>
+      {/* Add form or button — organiser only */}
+      {isOrganiser && (
+        showAddForm ? (
+          <AddActivityForm
+            tripId={tripId}
+            dayNumber={selectedDay}
+            onDone={() => { setShowAddForm(false); router.refresh() }}
+          />
+        ) : (
+          <button
+            onClick={() => setShowAddForm(true)}
+            className="w-full bg-white border border-dashed border-emerald-300 rounded-xl p-3 text-sm text-emerald-600 font-medium hover:bg-emerald-50 transition-colors"
+          >
+            + Add activity for Day {selectedDay}
+          </button>
+        )
       )}
 
       {/* Day summary */}

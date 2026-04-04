@@ -1,13 +1,16 @@
 'use client'
 
+import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { formatDate, buildVoteUrl } from '@/lib/utils'
 import type { PollWithVotes } from '@/types'
+import ShareButton from '@/components/ui/ShareButton'
 
 interface Props {
   poll: PollWithVotes
   tripId: string
   waitingFor?: string[]
+  isOrganiser?: boolean
 }
 
 function timeRemaining(deadline: string): string {
@@ -20,7 +23,7 @@ function timeRemaining(deadline: string): string {
   return `${mins}m left`
 }
 
-export default function PollCard({ poll, tripId: _tripId, waitingFor }: Props) {
+export default function PollCard({ poll, tripId, waitingFor, isOrganiser = true }: Props) {
   const router = useRouter()
   const totalVotes = poll.votes.length
   const isLocked = poll.status === 'locked'
@@ -33,10 +36,6 @@ export default function PollCard({ poll, tripId: _tripId, waitingFor }: Props) {
       body: JSON.stringify({ action }),
     })
     if (res.ok) router.refresh()
-  }
-
-  function copyVoteLink() {
-    navigator.clipboard.writeText(buildVoteUrl(poll.id))
   }
 
   return (
@@ -90,30 +89,47 @@ export default function PollCard({ poll, tripId: _tripId, waitingFor }: Props) {
 
       <p className="text-xs text-gray-400">Deadline: {formatDate(poll.deadline)}</p>
 
-      <div className="flex gap-2 pt-1">
-        {!isLocked && (
+      <div className="flex flex-col gap-2 pt-1">
+        {isOrganiser && !isLocked && (
           <>
-            <button
-              onClick={copyVoteLink}
-              className="flex-1 py-1.5 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
+            <div className="flex gap-2">
+              <ShareButton
+                url={buildVoteUrl(poll.id)}
+                title={poll.question}
+                text={`Vote on our trip poll: "${poll.question}"`}
+                label="Share"
+                className="flex-1 py-1.5 text-xs bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+              />
+              <button
+                onClick={() => handleAction('lock')}
+                className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              >
+                Lock now
+              </button>
+            </div>
+            <Link
+              href={`/vote/${poll.id}`}
+              className="w-full py-1.5 text-xs text-center border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
             >
-              Copy vote link
-            </button>
-            <button
-              onClick={() => handleAction('lock')}
-              className="flex-1 py-1.5 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
-            >
-              Lock now
-            </button>
+              Cast your vote →
+            </Link>
           </>
         )}
-        {isLocked && (
+        {isOrganiser && isLocked && (
           <button
             onClick={() => handleAction('reopen')}
             className="py-1.5 px-3 text-xs border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 transition-colors"
           >
             Re-vote
           </button>
+        )}
+        {!isOrganiser && !isLocked && (
+          <Link
+            href={`/vote/${poll.id}`}
+            className="flex-1 py-1.5 text-xs text-center bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          >
+            Cast your vote →
+          </Link>
         )}
       </div>
     </div>

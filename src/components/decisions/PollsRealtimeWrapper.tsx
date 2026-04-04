@@ -9,9 +9,10 @@ interface Props {
   initialPolls: PollWithVotes[]
   tripId: string
   members: { name: string; email: string }[]
+  isOrganiser?: boolean
 }
 
-export default function PollsRealtimeWrapper({ initialPolls, tripId, members }: Props) {
+export default function PollsRealtimeWrapper({ initialPolls, tripId, members, isOrganiser = true }: Props) {
   const [polls, setPolls] = useState<PollWithVotes[]>(initialPolls)
 
   useEffect(() => {
@@ -86,7 +87,7 @@ export default function PollsRealtimeWrapper({ initialPolls, tripId, members }: 
             const waitingFor = members
               .filter((m) => !voterEmails.includes(m.email))
               .map((m) => m.name)
-            return <PollCard key={poll.id} poll={poll} tripId={tripId} waitingFor={waitingFor} />
+            return <PollCard key={poll.id} poll={poll} tripId={tripId} waitingFor={waitingFor} isOrganiser={isOrganiser} />
           })}
         </div>
       )}

@@ -12,7 +12,7 @@ import { formatDateRange, buildInviteUrl, getInitials, getAvatarColor } from '@/
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
 import { CardSkeleton } from '@/components/ui/Skeleton'
-import CopyInviteButton from '@/components/trips/CopyInviteButton'
+import ShareButton from '@/components/ui/ShareButton'
 import EditTripForm from '@/components/trips/EditTripForm'
 import BudgetDistributionCard from '@/components/budget/BudgetDistributionCard'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
@@ -289,7 +289,13 @@ export default async function TripDashboardPage({
             <p className="text-xs text-gray-400">{members.length} of {trip.group_size} joined</p>
           </div>
         </div>
-        <CopyInviteButton inviteUrl={inviteUrl} label="Invite" />
+        <ShareButton
+          url={inviteUrl}
+          title="Join our trip on APIcTrips"
+          text={`You're invited to join the trip to ${trip.destination}! Join here:`}
+          label="Invite"
+          className="py-1.5 px-3 text-xs bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+        />
       </div>
 
       {/* Ghost member alert */}

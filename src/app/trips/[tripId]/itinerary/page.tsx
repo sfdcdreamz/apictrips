@@ -24,11 +24,22 @@ async function getItineraryData(tripId: string) {
 
   const { data: trip } = await supabase
     .from('trips')
-    .select('id, name, start_date, end_date')
+    .select('id, name, start_date, end_date, organiser_id')
     .eq('id', tripId)
-    .eq('organiser_id', user.id)
     .single()
   if (!trip) return null
+
+  const isOrganiser = trip.organiser_id === user.id
+
+  if (!isOrganiser) {
+    const { data: member } = await supabase
+      .from('members')
+      .select('id')
+      .eq('trip_id', tripId)
+      .eq('email', user.email!)
+      .single()
+    if (!member) return null
+  }
 
   const serviceSupabase = createServiceRoleClient()
   const { data: items } = await serviceSupabase
@@ -41,6 +52,7 @@ async function getItineraryData(tripId: string) {
   return {
     trip,
     items: (items || []) as ItineraryItem[],
+    isOrganiser,
   }
 }
 
@@ -53,7 +65,7 @@ export default async function ItineraryPage({
   const data = await getItineraryData(tripId)
   if (!data) notFound()
 
-  const { trip, items } = data
+  const { trip, items, isOrganiser } = data
   const days = getDaysBetween(trip.start_date, trip.end_date)
 
   return (
@@ -64,7 +76,7 @@ export default async function ItineraryPage({
         <p className="text-blue-100 text-sm mt-1">Day-by-day plan · Tap activities to mark done or swap.</p>
       </div>
 
-      <ItineraryClient tripId={tripId} days={days} items={items} />
+      <ItineraryClient tripId={tripId} days={days} items={items} isOrganiser={isOrganiser} />
     </div>
   )
 }
