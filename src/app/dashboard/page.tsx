@@ -1,9 +1,10 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { formatDateRange } from '@/lib/utils'
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
+import ReferralCard from '@/components/ui/ReferralCard'
 import type { Trip } from '@/types'
 
 export default async function DashboardPage({
@@ -17,7 +18,9 @@ export default async function DashboardPage({
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  const [{ data: trips }, { data: memberRows }] = await Promise.all([
+  const serviceSupabase = createServiceRoleClient()
+
+  const [{ data: trips }, { data: memberRows }, { count: referralCount }] = await Promise.all([
     supabase
       .from('trips')
       .select('*')
@@ -28,6 +31,10 @@ export default async function DashboardPage({
       .select('trip_id, is_organiser, trips(*)')
       .eq('email', user.email!)
       .eq('is_organiser', false),
+    serviceSupabase
+      .from('referrals')
+      .select('id', { count: 'exact', head: true })
+      .eq('referrer_id', user.id),
   ])
 
   const organiserTripList = (trips || []) as Trip[]
@@ -139,6 +146,20 @@ export default async function DashboardPage({
             )}
           </>
         )}
+        {/* Referral */}
+        <div className="mt-6">
+          <ReferralCard userId={user.id} referralCount={referralCount || 0} />
+        </div>
+
+        {/* Quick links */}
+        <div className="mt-3 flex gap-3">
+          <Link
+            href="/templates"
+            className="text-xs text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            🗺️ Browse trip templates
+          </Link>
+        </div>
       </div>
     </div>
   )

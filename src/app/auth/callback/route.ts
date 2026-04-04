@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 
 export async function GET(request: Request) {
@@ -10,17 +11,40 @@ export async function GET(request: Request) {
     const supabase = await createClient()
     const { error } = await supabase.auth.exchangeCodeForSession(code)
     if (!error) {
-      // Backfill user_id on member rows created before auth
       const { data: { user } } = await supabase.auth.getUser()
       if (user?.email) {
         const serviceSupabase = createServiceRoleClient()
+
+        // Backfill user_id on member rows created before auth
         await serviceSupabase
           .from('members')
           .update({ user_id: user.id })
           .eq('email', user.email)
           .is('user_id', null)
+
+        // Track referral if _ref cookie is present
+        const cookieStore = await cookies()
+        const refCode = cookieStore.get('_ref')?.value
+        if (refCode && refCode !== user.id) {
+          const { data: existing } = await serviceSupabase
+            .from('referrals')
+            .select('id')
+            .eq('referrer_id', refCode)
+            .eq('referred_email', user.email)
+            .single()
+
+          if (!existing) {
+            await serviceSupabase
+              .from('referrals')
+              .insert({ referrer_id: refCode, referred_email: user.email })
+          }
+        }
       }
-      return NextResponse.redirect(`${origin}${next}`)
+
+      const response = NextResponse.redirect(`${origin}${next}`)
+      // Clear the ref cookie after use
+      response.cookies.delete('_ref')
+      return response
     }
   }
 
