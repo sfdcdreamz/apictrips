@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# research & design artifacts (not part of codebase)
+*.docx
+*.csv
+*.jpg
+mobile-nav-mockup.html
+ui-mockup.html
