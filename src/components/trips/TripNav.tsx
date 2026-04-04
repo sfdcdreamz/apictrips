@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { usePathname } from 'next/navigation'
+import { usePathname, useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { createClient } from '@/lib/supabase/client'
 import { getInitials, getAvatarColor } from '@/lib/utils'
 import { useTripRole } from './TripRoleContext'
 
@@ -15,8 +16,16 @@ interface Props {
 
 export default function TripNav({ tripId, tripName: _tripName, isLive, members }: Props) {
   const pathname = usePathname()
+  const router = useRouter()
   const [open, setOpen] = useState(false)
   const { isOrganiser } = useTripRole()
+
+  async function handleSignOut() {
+    const supabase = createClient()
+    await supabase.auth.signOut()
+    router.push('/auth/login')
+    router.refresh()
+  }
 
   useEffect(() => setOpen(false), [pathname])
 
@@ -113,6 +122,12 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
               {tab.label}
             </Link>
           ))}
+          <button
+            onClick={handleSignOut}
+            className="block w-full text-left px-2 py-3 text-sm font-medium border-l-2 border-transparent text-gray-400 hover:text-gray-600 transition-colors"
+          >
+            Sign out
+          </button>
         </div>
       )}
 
@@ -147,6 +162,9 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
 
         <div className="ml-auto flex items-center gap-2 py-3 pl-4 shrink-0">
           {avatars}
+          <button onClick={handleSignOut} className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            Sign out
+          </button>
         </div>
       </div>
     </nav>

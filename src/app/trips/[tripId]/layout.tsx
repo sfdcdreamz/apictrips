@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import TripNav from '@/components/trips/TripNav'
 import TripRoleProvider from '@/components/trips/TripRoleContext'
@@ -33,7 +33,7 @@ export default async function TripLayout({
   // Non-organisers must be a member of the trip (matched by auth email)
   if (!isOrganiser) {
     const isMember = (members || []).some((m) => m.email === user.email)
-    if (!isMember) notFound()
+    if (!isMember) redirect('/dashboard?error=no-access')
   }
 
   const today = new Date()
