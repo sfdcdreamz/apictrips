@@ -72,6 +72,7 @@ export interface Expense {
   description: string; logged_by: string; expense_date: string; created_at: string
   paid_by?: string | null
   split_between?: string[] | null
+  receipt_url?: string | null
 }
 
 export interface Settlement {
@@ -85,6 +86,17 @@ export interface Settlement {
   upi_ref?: string | null
   created_at: string
   confirmed_at?: string | null
+}
+
+export interface VendorContact {
+  id: string
+  trip_id: string
+  name: string
+  role: string
+  phone: string | null
+  notes: string | null
+  added_by: string
+  created_at: string
 }
 
 export type TripHealthStatus = 'healthy' | 'at-risk' | 'not-started'

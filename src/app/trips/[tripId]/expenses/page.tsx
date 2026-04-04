@@ -182,7 +182,7 @@ export default async function ExpensesPage({
           {/* Recent */}
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Recent Expenses</h2>
-            <ExpenseList expenses={recentExpenses} currency={pool.currency} />
+            <ExpenseList expenses={recentExpenses} currency={pool.currency} tripId={tripId} />
           </div>
 
           {/* Settlement ledger */}

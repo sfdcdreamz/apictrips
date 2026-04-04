@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import PollCard from './PollCard'
-import type { PollWithVotes, Vote } from '@/types'
+import type { Poll, PollWithVotes, Vote } from '@/types'
 
 interface Props {
   initialPolls: PollWithVotes[]
@@ -43,6 +43,25 @@ export default function PollsRealtimeWrapper({ initialPolls, tripId, members }: 
                 : poll
             )
           )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'polls', filter: `trip_id=eq.${tripId}` },
+        (payload) => {
+          const updated = payload.new as Poll
+          setPolls((prev) =>
+            prev.map((p) => (p.id === updated.id ? { ...p, ...updated } : p))
+          )
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'polls', filter: `trip_id=eq.${tripId}` },
+        (payload) => {
+          const newPoll = { ...(payload.new as Poll), votes: [] } as PollWithVotes
+          pollIds.add(newPoll.id)
+          setPolls((prev) => [newPoll, ...prev])
         }
       )
       .subscribe()

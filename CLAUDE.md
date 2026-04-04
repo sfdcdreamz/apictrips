@@ -1,13 +1,13 @@
 @AGENTS.md
 
-## Last Session Note (2026-04-04, Session 3)
+## Last Session Note (2026-04-04, Session 4)
 
 **Completed this session:**
-- ✅ #48 Live mode auto-switch — red LIVE badge in TripNav, green banner on dashboard when `start_date ≤ today ≤ end_date`
-- ✅ #57 Expense CSV export — GET `/api/trips/[tripId]/export/expenses`, Download CSV button (organiser only)
-- ✅ #34 Compatibility check at invite — `existingVibeMembers` returned from invite API, live Vibe Impact card in VibeCheckForm
-- ✅ #51 Emergency card — `/trips/[tripId]/emergency` page with member list + India emergency numbers; Emergency tab added to TripNav
-- ✅ #47 Live presence — `TripPresence` client component using Supabase Realtime Presence; shows "N viewing" badge when >1 viewer
+- ✅ #45 Live poll counts (Realtime) — `PollsRealtimeWrapper` now subscribes to poll UPDATE (lock) + INSERT (new poll) events
+- ✅ #42 "What We Agreed" timeline — `/trips/[tripId]/timeline` page + Timeline tab in TripNav; reuses `AgreementTimeline`
+- ✅ #50 Pivot poll — `PivotPollForm` (red card, duration select 1/2/4/6h); shown on polls page when trip is LIVE
+- ✅ #52 Vendor contact book — `vendor_contacts` table, GET/POST/DELETE API, `/trips/[tripId]/vendors` page + Vendors tab; organiser adds, all members read with tap-to-call
+- ✅ #49 Receipt photo capture — POST/GET `/api/.../receipt` route, receipt upload step in `LogExpenseForm`, 📎 icon in `ExpenseList`
 
 **DB schema changes still needed** — run ALL of these in Supabase SQL editor if not already applied:
 ```sql
@@ -51,9 +51,42 @@ ALTER TABLE public.budget_disclosures ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Members can upsert own disclosure"
   ON public.budget_disclosures FOR ALL
   USING (member_email = auth.email());
+
+-- #52: Vendor contact book (Session 4)
+CREATE TABLE IF NOT EXISTS public.vendor_contacts (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
+  name text NOT NULL,
+  role text NOT NULL,
+  phone text,
+  notes text,
+  added_by text NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS vendor_contacts_trip_id_idx ON public.vendor_contacts(trip_id);
+ALTER TABLE public.vendor_contacts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Organiser manages vendor contacts"
+  ON public.vendor_contacts FOR ALL
+  USING (trip_id IN (SELECT id FROM public.trips WHERE organiser_id = auth.uid()));
+CREATE POLICY IF NOT EXISTS "Members can read vendor contacts"
+  ON public.vendor_contacts FOR SELECT
+  USING (trip_id IN (SELECT trip_id FROM public.members WHERE email = auth.email()));
+
+-- #49: Receipt URL column (Session 4)
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS receipt_url text;
 ```
 
-**Resume next:** #45 (live poll vote counts via Realtime) → #42 ("What We Agreed" timeline) → #49 (receipt photo capture) → #50 (pivot poll) → #54/#55 (AI features — need Anthropic API key in Vercel env vars).
+**#49 Storage setup (manual):** In Supabase Dashboard → Storage, create bucket `receipts` (private), then run:
+```sql
+CREATE POLICY "Authenticated upload receipts"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read receipts"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'receipts' AND auth.role() = 'authenticated');
+```
+
+**Resume next:** #53/#54/#55 (AI features — need `ANTHROPIC_API_KEY` in Vercel env vars) → #39 (pre-commitment micro-deposit) → #56 (debt amnesty vote) → #58–60 (post-trip) → #61–63 (monetisation).
 
 ---
 
@@ -341,14 +374,14 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 |---|------|--------|-----------|
 | 40 | Decisions Digest page (all locked polls + itinerary + budget) | ✅ | `src/app/trips/[tripId]/digest/page.tsx` |
 | 41 | Public share link via `digest_token` (no auth) | ✅ | `src/app/digest/[digestToken]/page.tsx` |
-| 42 | "What We Agreed" timeline (immutable decision log) | 🔲 | New component |
+| 42 | "What We Agreed" timeline (immutable decision log) | ✅ | `src/app/trips/[tripId]/timeline/page.tsx` |
 | 43 | Trip templates (publish itinerary for others to clone) | 🔲 | New feature |
 | 44 | Referral system | 🔲 | New feature |
 
 ### Tier 9 — Real-Time Features
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 45 | Live poll vote counts (Supabase Realtime) | 🔲 | `src/app/trips/[tripId]/polls/page.tsx` |
+| 45 | Live poll vote counts (Supabase Realtime) | ✅ | `src/components/decisions/PollsRealtimeWrapper.tsx` |
 | 46 | Activity notifications (in-app toast) | ✅ | `src/components/ui/ActivityToast.tsx`, mounted in layout |
 | 47 | Live presence (who's viewing the trip) | ✅ | `src/components/trips/TripPresence.tsx` |
 
@@ -356,10 +389,10 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
 | 48 | Auto-switch to live mode on `start_date` | ✅ | `src/app/trips/[tripId]/layout.tsx`, `TripNav.tsx`, dashboard `page.tsx` |
-| 49 | Receipt photo capture (Supabase Storage) | 🔲 | expense logging |
-| 50 | Pivot poll (instant re-vote mid-trip) | 🔲 | polls |
+| 49 | Receipt photo capture (Supabase Storage) | ✅ | `src/app/api/trips/[tripId]/pool/expenses/[expenseId]/receipt/route.ts`, `LogExpenseForm`, `ExpenseList` |
+| 50 | Pivot poll (instant re-vote mid-trip) | ✅ | `src/components/decisions/PivotPollForm.tsx`, polls page |
 | 51 | Emergency card (hospital, embassy, member contacts) | ✅ | `src/app/trips/[tripId]/emergency/page.tsx` |
-| 52 | Shared vendor contact book (driver, hotel, guide) | 🔲 | New feature |
+| 52 | Shared vendor contact book (driver, hotel, guide) | ✅ | `src/app/trips/[tripId]/vendors/page.tsx`, vendors API, `AddVendorForm` |
 
 ### Tier 11 — AI Features
 | # | Item | Status | Key files |
@@ -388,9 +421,9 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 
 ## Progress Summary
 
-**48 / 63 items complete (76%)**
+**53 / 63 items complete (84%)**
 
-Remaining high-value items: #45 (live poll counts), #42 (agreement timeline), #49 (receipt capture), #50 (pivot poll), #52 (vendor contacts), #53–55 (AI — needs `ANTHROPIC_API_KEY`), #56–60 (post-trip), #61–63 (monetisation).
+Remaining high-value items: #53–55 (AI — needs `ANTHROPIC_API_KEY`), #39 (pre-commitment micro-deposit), #56 (debt amnesty vote), #58–60 (post-trip), #61–63 (monetisation).
 
 ---
 

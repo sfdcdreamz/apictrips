@@ -22,6 +22,9 @@ export default function LogExpenseForm({ tripId, members = [] }: Props) {
   const [paidBy, setPaidBy] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState('')
+  // Receipt upload step
+  const [createdExpenseId, setCreatedExpenseId] = useState<string | null>(null)
+  const [uploadState, setUploadState] = useState<'idle' | 'uploading' | 'done'>('idle')
 
   // Optimistic pending rows shown while the API call is in flight
   const [optimisticRows, addOptimisticRow] = useOptimistic(
@@ -67,17 +70,77 @@ export default function LogExpenseForm({ tripId, members = [] }: Props) {
         return
       }
 
+      const data = await res.json()
+      setCreatedExpenseId(data.expense?.id || null)
       setAmount('')
       setDescription('')
       setLoggedBy('')
       setPaidBy('')
       setDate(new Date().toISOString().split('T')[0])
       setShowForm(false)
-      router.refresh()
+      // Don't refresh yet — show receipt upload step if we have an expense id
     })
   }
 
+  function finishAndRefresh() {
+    setCreatedExpenseId(null)
+    setUploadState('idle')
+    router.refresh()
+  }
+
+  async function handleReceiptUpload(file: File) {
+    if (!createdExpenseId) return
+    setUploadState('uploading')
+    const formData = new FormData()
+    formData.append('receipt', file)
+    await fetch(`/api/trips/${tripId}/pool/expenses/${createdExpenseId}/receipt`, {
+      method: 'POST',
+      body: formData,
+    })
+    setUploadState('done')
+    setTimeout(finishAndRefresh, 800)
+  }
+
   const loading = isPending
+
+  // Receipt upload step — shown after expense is created
+  if (createdExpenseId) {
+    return (
+      <div className="bg-violet-50 rounded-xl p-4 space-y-3">
+        <h3 className="text-sm font-semibold text-gray-700">Add a receipt? (optional)</h3>
+        {uploadState === 'uploading' && (
+          <p className="text-sm text-violet-600">Uploading…</p>
+        )}
+        {uploadState === 'done' && (
+          <p className="text-sm text-emerald-600">Receipt saved ✓</p>
+        )}
+        {uploadState === 'idle' && (
+          <>
+            <label className="block w-full cursor-pointer border-2 border-dashed border-violet-200 rounded-xl text-center py-4 text-sm text-violet-600 hover:border-violet-400 transition-colors">
+              <span>📷 Tap to attach receipt photo</span>
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                capture="environment"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0]
+                  if (file) handleReceiptUpload(file)
+                }}
+              />
+            </label>
+            <button
+              type="button"
+              onClick={finishAndRefresh}
+              className="w-full py-2 text-sm text-gray-400 hover:text-gray-600"
+            >
+              Skip
+            </button>
+          </>
+        )}
+      </div>
+    )
+  }
 
   if (!showForm) {
     return (

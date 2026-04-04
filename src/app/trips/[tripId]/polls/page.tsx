@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import PollsRealtimeWrapper from '@/components/decisions/PollsRealtimeWrapper'
 import CreatePollForm from '@/components/decisions/CreatePollForm'
+import PivotPollForm from '@/components/decisions/PivotPollForm'
 import type { Member, PollWithVotes } from '@/types'
 
 async function getPollsData(tripId: string) {
@@ -11,11 +12,14 @@ async function getPollsData(tripId: string) {
 
   const { data: trip } = await supabase
     .from('trips')
-    .select('id')
+    .select('id, start_date, end_date')
     .eq('id', tripId)
     .eq('organiser_id', user.id)
     .single()
   if (!trip) return null
+
+  const today = new Date().toISOString().split('T')[0]
+  const isLive = !!(trip.start_date && trip.end_date && today >= trip.start_date && today <= trip.end_date)
 
   const serviceSupabase = createServiceRoleClient()
 
@@ -69,6 +73,7 @@ async function getPollsData(tripId: string) {
   return {
     polls: (polls || []) as PollWithVotes[],
     members: (members || []) as Pick<Member, 'name' | 'email'>[],
+    isLive,
   }
 }
 
@@ -81,7 +86,7 @@ export default async function PollsPage({
   const data = await getPollsData(tripId)
   if (!data) notFound()
 
-  const { polls, members } = data
+  const { polls, members, isLive } = data
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
@@ -90,6 +95,16 @@ export default async function PollsPage({
         <h1 className="text-2xl font-bold">Decision Engine</h1>
         <p className="text-emerald-100 text-sm mt-1">Vote on open polls — majority wins, decisions lock.</p>
       </div>
+
+      {/* Pivot poll — shown during LIVE mode */}
+      {isLive && (
+        <div className="bg-white rounded-2xl border-2 border-red-200 p-5">
+          <p className="text-xs font-bold text-red-600 uppercase tracking-wide mb-3">
+            🔴 Trip is LIVE — Pivot Poll
+          </p>
+          <PivotPollForm tripId={tripId} />
+        </div>
+      )}
 
       {/* Create poll */}
       <div className="bg-white rounded-2xl border border-stone-100 p-5">

@@ -1,5 +1,6 @@
 import type { Expense, ExpenseCategory } from '@/types'
 import { formatDate } from '@/lib/utils'
+import ReceiptButton from './ReceiptButton'
 
 const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
   Flights: 'bg-blue-100 text-blue-700',
@@ -13,9 +14,10 @@ const CATEGORY_COLORS: Record<ExpenseCategory, string> = {
 interface Props {
   expenses: Expense[]
   currency: string
+  tripId?: string
 }
 
-export default function ExpenseList({ expenses, currency }: Props) {
+export default function ExpenseList({ expenses, currency, tripId }: Props) {
   if (expenses.length === 0) {
     return <p className="text-sm text-gray-400 text-center py-4">No expenses logged yet.</p>
   }
@@ -35,9 +37,14 @@ export default function ExpenseList({ expenses, currency }: Props) {
             <p className="text-sm text-gray-800 truncate">{expense.description}</p>
             <p className="text-xs text-gray-400">{expense.logged_by} · {formatDate(expense.expense_date)}</p>
           </div>
-          <span className="text-sm font-bold text-gray-900 shrink-0">
-            {currency === 'INR' ? '₹' : currency}{expense.amount.toLocaleString()}
-          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            <span className="text-sm font-bold text-gray-900">
+              {currency === 'INR' ? '₹' : currency}{expense.amount.toLocaleString()}
+            </span>
+            {tripId && expense.receipt_url && (
+              <ReceiptButton tripId={tripId} expenseId={expense.id} />
+            )}
+          </div>
         </div>
       ))}
     </div>

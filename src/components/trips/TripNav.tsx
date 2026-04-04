@@ -25,7 +25,9 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
     { label: 'Vibe Check', href: `/trips/${tripId}/vibe-check` },
     { label: 'Itinerary', href: `/trips/${tripId}/itinerary` },
     { label: 'Digest', href: `/trips/${tripId}/digest` },
+    { label: 'Timeline', href: `/trips/${tripId}/timeline` },
     { label: 'Emergency', href: `/trips/${tripId}/emergency` },
+    { label: 'Vendors', href: `/trips/${tripId}/vendors` },
   ]
 
   function isActive(href: string) {
