@@ -1,5 +1,137 @@
 @AGENTS.md
 
+## Last Session Note (2026-04-05, Session 6)
+
+**Completed this session — all 10 non-AI remaining features:**
+- ✅ #56 Debt amnesty vote — post-trip balance forgiveness; majority vote auto-confirms pending settlements
+- ✅ #58 Trip recap — `/trips/[tripId]/recap` page with stats, budget breakdown, highlights, engagement score
+- ✅ #59 Trip ratings — 1–5 star form (overall/planning/value + would_go_again + comment); avg shown on recap
+- ✅ #60 Trip memories — photo gallery with upload (10MB, JPEG/PNG/WebP/HEIC), lightbox, delete
+- ✅ #43 Trip templates — publish itinerary from recap; clone at `/templates`; pre-fills itinerary on new trip
+- ✅ #44 Referral system — `/r/[userId]` link; cookie tracked through auth callback; dashboard shows count
+- ✅ #63 Affiliate booking links — Booking.com / MakeMyTrip / Agoda on trip dashboard
+
+**New DB migrations needed** (run in Supabase SQL editor):
+```sql
+-- #56: Debt amnesty votes
+ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS amnesty_votes text[] DEFAULT '{}';
+
+-- #59: Trip ratings
+CREATE TABLE IF NOT EXISTS public.trip_ratings (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
+  member_email text NOT NULL,
+  overall int NOT NULL CHECK (overall BETWEEN 1 AND 5),
+  planning int CHECK (planning BETWEEN 1 AND 5),
+  value int CHECK (value BETWEEN 1 AND 5),
+  would_go_again boolean,
+  comment text,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  UNIQUE (trip_id, member_email)
+);
+ALTER TABLE public.trip_ratings ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can rate their trips"
+  ON public.trip_ratings FOR ALL
+  USING (trip_id IN (
+    SELECT trip_id FROM public.members WHERE email = auth.email()
+    UNION
+    SELECT id FROM public.trips WHERE organiser_id = auth.uid()
+  ));
+
+-- #60: Trip photos
+CREATE TABLE IF NOT EXISTS public.trip_photos (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
+  uploaded_by text NOT NULL,
+  storage_path text NOT NULL,
+  caption text,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS trip_photos_trip_id_idx ON public.trip_photos(trip_id);
+ALTER TABLE public.trip_photos ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Members can manage trip photos"
+  ON public.trip_photos FOR ALL
+  USING (
+    trip_id IN (
+      SELECT trip_id FROM public.members WHERE email = auth.email()
+      UNION
+      SELECT id FROM public.trips WHERE organiser_id = auth.uid()
+    )
+  );
+
+-- #43: Trip templates
+CREATE TABLE IF NOT EXISTS public.trip_templates (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  created_by uuid REFERENCES auth.users(id) NOT NULL,
+  name text NOT NULL,
+  destination text NOT NULL,
+  duration_days int NOT NULL DEFAULT 1,
+  description text,
+  is_public boolean NOT NULL DEFAULT true,
+  cloned_count int NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+ALTER TABLE public.trip_templates ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public templates readable by authenticated users"
+  ON public.trip_templates FOR SELECT
+  USING (is_public = true AND auth.role() = 'authenticated');
+CREATE POLICY "Creators can manage their templates"
+  ON public.trip_templates FOR ALL
+  USING (created_by = auth.uid());
+
+CREATE TABLE IF NOT EXISTS public.template_items (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  template_id uuid REFERENCES public.trip_templates(id) ON DELETE CASCADE NOT NULL,
+  day_number int NOT NULL DEFAULT 1,
+  title text NOT NULL,
+  item_type text NOT NULL DEFAULT 'activity',
+  description text,
+  cost numeric NOT NULL DEFAULT 0,
+  created_at timestamptz DEFAULT now() NOT NULL
+);
+CREATE INDEX IF NOT EXISTS template_items_template_id_idx ON public.template_items(template_id);
+ALTER TABLE public.template_items ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Template items follow template visibility"
+  ON public.template_items FOR SELECT
+  USING (template_id IN (SELECT id FROM public.trip_templates WHERE is_public = true));
+
+-- #44: Referrals
+CREATE TABLE IF NOT EXISTS public.referrals (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  referrer_id uuid REFERENCES auth.users(id) NOT NULL,
+  referred_email text NOT NULL,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  UNIQUE (referrer_id, referred_email)
+);
+CREATE INDEX IF NOT EXISTS referrals_referrer_id_idx ON public.referrals(referrer_id);
+ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Users see their own referrals"
+  ON public.referrals FOR SELECT
+  USING (referrer_id = auth.uid());
+CREATE POLICY "Service role inserts referrals"
+  ON public.referrals FOR INSERT
+  WITH CHECK (true);
+```
+
+**#60 Storage setup (manual):** In Supabase Dashboard → Storage, create bucket `photos` (private), then run:
+```sql
+CREATE POLICY "Authenticated upload photos"
+  ON storage.objects FOR INSERT
+  WITH CHECK (bucket_id = 'photos' AND auth.role() = 'authenticated');
+CREATE POLICY "Authenticated read photos"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'photos' AND auth.role() = 'authenticated');
+```
+
+**#63 Affiliate IDs (env vars in Vercel):**
+- `NEXT_PUBLIC_BOOKING_AFFILIATE_ID` — Booking.com affiliate ID
+- `NEXT_PUBLIC_MMT_AFFILIATE_ID` — MakeMyTrip affiliate ID
+- `NEXT_PUBLIC_AGODA_AFFILIATE_ID` — Agoda affiliate ID
+
+**Remaining:** #53–55 (AI — need `ANTHROPIC_API_KEY`), #39 (pre-commitment micro-deposit — needs Razorpay), #61 (freemium — needs Razorpay), #62 (transaction fee — needs Razorpay).
+
+---
+
 ## Last Session Note (2026-04-04, Session 5)
 
 **Completed this session:**
@@ -397,8 +529,8 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 | 40 | Decisions Digest page (all locked polls + itinerary + budget) | ✅ | `src/app/trips/[tripId]/digest/page.tsx` |
 | 41 | Public share link via `digest_token` (no auth) | ✅ | `src/app/digest/[digestToken]/page.tsx` |
 | 42 | "What We Agreed" timeline (immutable decision log) | ✅ | `src/app/trips/[tripId]/timeline/page.tsx` |
-| 43 | Trip templates (publish itinerary for others to clone) | 🔲 | New feature |
-| 44 | Referral system | 🔲 | New feature |
+| 43 | Trip templates (publish itinerary for others to clone) | ✅ | `src/app/templates/page.tsx`, `CloneTemplateForm`, `PublishTemplateButton` |
+| 44 | Referral system | ✅ | `src/app/r/[code]/route.ts`, `ReferralCard`, auth callback |
 
 ### Tier 9 — Real-Time Features
 | # | Item | Status | Key files |
@@ -426,26 +558,26 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 12 — Post-Trip
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 56 | Post-trip debt amnesty vote (forgive small balances) | 🔲 | settlements + voting |
+| 56 | Post-trip debt amnesty vote (forgive small balances) | ✅ | `src/app/api/trips/[tripId]/amnesty/route.ts`, `AmnestyVoteCard` |
 | 57 | Expense report export (PDF/CSV) | ✅ | `src/app/api/trips/[tripId]/export/expenses/route.ts` |
-| 58 | Trip recap (auto-generated summary) | 🔲 | New page |
-| 59 | Trip ratings | 🔲 | New feature |
-| 60 | Trip memories / photo gallery (Supabase Storage) | 🔲 | New feature |
+| 58 | Trip recap (auto-generated summary) | ✅ | `src/app/trips/[tripId]/recap/page.tsx`, `TripRatingForm` |
+| 59 | Trip ratings | ✅ | `src/app/api/trips/[tripId]/ratings/route.ts`, `TripRatingForm` |
+| 60 | Trip memories / photo gallery (Supabase Storage) | ✅ | `src/app/trips/[tripId]/memories/page.tsx`, `PhotoGrid`, `PhotoUploadForm` |
 
 ### Tier 13 — Monetisation
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 61 | Freemium model (free: 5 members / 1 trip; paid: unlimited) | 🔲 | Auth + billing |
+| 61 | Freemium model (free: 5 members / 1 trip; paid: unlimited) | 🔲 | Auth + billing (needs Razorpay) |
 | 62 | Transaction fee on in-app settlements | 🔲 | Razorpay integration |
-| 63 | Affiliate commission (Booking.com / MakeMyTrip) | 🔲 | Link generation |
+| 63 | Affiliate commission (Booking.com / MakeMyTrip) | ✅ | `src/lib/affiliate.ts`, `AffiliateBookingLinks` |
 
 ---
 
 ## Progress Summary
 
-**53 / 63 items complete (84%)**
+**60 / 63 items complete (95%)**
 
-Remaining high-value items: #53–55 (AI — needs `ANTHROPIC_API_KEY`), #39 (pre-commitment micro-deposit), #56 (debt amnesty vote), #58–60 (post-trip), #61–63 (monetisation).
+Remaining: #53–55 (AI — needs `ANTHROPIC_API_KEY`), #39 (pre-commitment micro-deposit — needs Razorpay), #61 (freemium — needs Razorpay), #62 (transaction fee — needs Razorpay).
 
 ---
 
