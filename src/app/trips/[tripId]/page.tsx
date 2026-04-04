@@ -1,4 +1,4 @@
-import { notFound } from 'next/navigation'
+import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { detectConflicts } from '@/lib/conflict-detector'
@@ -15,15 +15,17 @@ async function getTripData(tripId: string) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return null
 
-  const { data: trip } = await supabase
+  const serviceSupabase = createServiceRoleClient()
+
+  const { data: trip } = await serviceSupabase
     .from('trips')
     .select('*')
     .eq('id', tripId)
-    .eq('organiser_id', user.id)
     .single()
   if (!trip) return null
 
-  const serviceSupabase = createServiceRoleClient()
+  // Non-organisers get redirected to the member view
+  if (trip.organiser_id !== user.id) return { redirect: true as const, tripId }
 
   const [
     { data: members },
@@ -32,7 +34,7 @@ async function getTripData(tripId: string) {
     { data: iItems },
     imageUrl,
   ] = await Promise.all([
-    supabase.from('members').select('*').eq('trip_id', tripId).order('joined_at', { ascending: true }),
+    serviceSupabase.from('members').select('*').eq('trip_id', tripId).order('joined_at', { ascending: true }),
     serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
     serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
     serviceSupabase.from('itinerary_items').select('day_number').eq('trip_id', tripId),
@@ -61,6 +63,7 @@ export default async function TripDashboardPage({
   const { tripId } = await params
   const result = await getTripData(tripId)
   if (!result) notFound()
+  if ('redirect' in result) redirect(`/trips/${tripId}/member`)
 
   const { trip, members, polls, pool, itineraryDays, imageUrl } = result
   const conflicts = detectConflicts(members)
