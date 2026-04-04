@@ -39,6 +39,7 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
     { label: 'Timeline', href: `/trips/${tripId}/timeline` },
     { label: 'Emergency', href: `/trips/${tripId}/emergency` },
     { label: 'Vendors', href: `/trips/${tripId}/vendors` },
+    { label: 'Memories', href: `/trips/${tripId}/memories` },
     { label: 'Recap', href: `/trips/${tripId}/recap` },
   ]
 
@@ -50,6 +51,7 @@ export default function TripNav({ tripId, tripName: _tripName, isLive, members }
     { label: 'Timeline',  href: `/trips/${tripId}/timeline` },
     { label: 'Emergency', href: `/trips/${tripId}/emergency` },
     { label: 'Vendors',   href: `/trips/${tripId}/vendors` },
+    { label: 'Memories',  href: `/trips/${tripId}/memories` },
     { label: 'Recap',     href: `/trips/${tripId}/recap` },
   ]
 
