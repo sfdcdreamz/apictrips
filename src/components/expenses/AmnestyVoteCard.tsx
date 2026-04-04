@@ -1,35 +1,47 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface Props {
   tripId: string
-  initialVotes: string[]
-  memberCount: number
-  threshold: number
-  initialPassed: boolean
   currentUserEmail: string
   pendingSettlementsCount: number
   pendingAmount: number
   currency: string
 }
 
+interface AmnestyState {
+  votes: string[]
+  memberCount: number
+  threshold: number
+  passed: boolean
+}
+
 export default function AmnestyVoteCard({
   tripId,
-  initialVotes,
-  memberCount,
-  threshold,
-  initialPassed,
   currentUserEmail,
   pendingSettlementsCount,
   pendingAmount,
   currency,
 }: Props) {
-  const [votes, setVotes] = useState<string[]>(initialVotes)
-  const [passed, setPassed] = useState(initialPassed)
+  const [state, setState] = useState<AmnestyState | null>(null)
   const [loading, setLoading] = useState(false)
 
+  useEffect(() => {
+    fetch(`/api/trips/${tripId}/amnesty`)
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data) => {
+        if (data) setState(data)
+      })
+      .catch(() => {})
+  }, [tripId])
+
   const currencySymbol = currency === 'INR' ? '₹' : currency
+
+  if (pendingSettlementsCount === 0) return null
+  if (!state) return null
+
+  const { votes, memberCount, threshold, passed } = state
   const hasVoted = votes.includes(currentUserEmail)
 
   async function handleVote() {
@@ -38,16 +50,13 @@ export default function AmnestyVoteCard({
       const res = await fetch(`/api/trips/${tripId}/amnesty`, { method: 'POST' })
       const data = await res.json()
       if (res.ok) {
-        setVotes(data.votes)
-        setPassed(data.passed)
+        setState(data)
         if (data.passed) window.location.reload()
       }
     } finally {
       setLoading(false)
     }
   }
-
-  if (pendingSettlementsCount === 0) return null
 
   return (
     <div className={`rounded-2xl border p-5 ${

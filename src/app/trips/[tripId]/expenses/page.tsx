@@ -28,7 +28,7 @@ async function getExpensesData(tripId: string) {
 
   const { data: trip } = await serviceSupabase
     .from('trips')
-    .select('id, group_size, organiser_id, name, destination, end_date, amnesty_votes')
+    .select('id, group_size, organiser_id, name, destination, end_date')
     .eq('id', tripId)
     .single()
   if (!trip) return null
@@ -41,10 +41,7 @@ async function getExpensesData(tripId: string) {
   ])
 
   const isPostTrip = new Date() > new Date(trip.end_date)
-  const amnestyVotes: string[] = trip.amnesty_votes || []
   const memberCount = members?.length || 0
-  const amnestyThreshold = Math.ceil(memberCount / 2)
-  const amnestyPassed = amnestyVotes.length >= amnestyThreshold && memberCount > 0
 
   return {
     pool: pool as (Pool & { expenses: Expense[] }) | null,
@@ -55,9 +52,6 @@ async function getExpensesData(tripId: string) {
     imageUrl: imageUrl || '',
     tripDestination: trip.destination as string,
     isPostTrip,
-    amnestyVotes,
-    amnestyThreshold,
-    amnestyPassed,
     currentUserEmail: user.email || '',
   }
 }
@@ -72,7 +66,7 @@ export default async function ExpensesPage({
   if (!data) notFound()
 
   const { pool, memberCount, members, settlements, isOrganiser, imageUrl, tripDestination,
-    isPostTrip, amnestyVotes, amnestyThreshold, amnestyPassed, currentUserEmail } = data
+    isPostTrip, currentUserEmail } = data
   const expenses: Expense[] = pool?.expenses || []
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
   const remaining = (pool?.total_amount || 0) - totalSpent
@@ -214,10 +208,6 @@ export default async function ExpensesPage({
             return (
               <AmnestyVoteCard
                 tripId={tripId}
-                initialVotes={amnestyVotes}
-                memberCount={memberCount}
-                threshold={amnestyThreshold}
-                initialPassed={amnestyPassed}
                 currentUserEmail={currentUserEmail}
                 pendingSettlementsCount={pendingSettlements.length}
                 pendingAmount={pendingAmount}
