@@ -14,6 +14,7 @@ export interface Trip {
   organiser_id: string
   invite_code: string
   created_at: string
+  amnesty_votes?: string[] | null
 }
 
 export interface Member {

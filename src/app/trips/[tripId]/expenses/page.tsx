@@ -7,6 +7,7 @@ import LogExpenseForm from '@/components/expenses/LogExpenseForm'
 import ExpenseList from '@/components/expenses/ExpenseList'
 import BudgetAlert from '@/components/expenses/BudgetAlert'
 import SettlementLedger from '@/components/expenses/SettlementLedger'
+import AmnestyVoteCard from '@/components/expenses/AmnestyVoteCard'
 import type { Pool, Expense, ExpenseCategory, Member, Settlement } from '@/types'
 
 const CATEGORY_ICONS: Record<ExpenseCategory, string> = {
@@ -27,7 +28,7 @@ async function getExpensesData(tripId: string) {
 
   const { data: trip } = await serviceSupabase
     .from('trips')
-    .select('id, group_size, organiser_id, name, destination')
+    .select('id, group_size, organiser_id, name, destination, end_date, amnesty_votes')
     .eq('id', tripId)
     .single()
   if (!trip) return null
@@ -39,14 +40,25 @@ async function getExpensesData(tripId: string) {
     getDestinationImage(trip.destination),
   ])
 
+  const isPostTrip = new Date() > new Date(trip.end_date)
+  const amnestyVotes: string[] = trip.amnesty_votes || []
+  const memberCount = members?.length || 0
+  const amnestyThreshold = Math.ceil(memberCount / 2)
+  const amnestyPassed = amnestyVotes.length >= amnestyThreshold && memberCount > 0
+
   return {
     pool: pool as (Pool & { expenses: Expense[] }) | null,
-    memberCount: members?.length || 0,
+    memberCount,
     members: (members || []) as Pick<Member, 'id' | 'name' | 'email' | 'upi_id'>[],
     settlements: (settlements || []) as Settlement[],
     isOrganiser: trip.organiser_id === user.id,
     imageUrl: imageUrl || '',
     tripDestination: trip.destination as string,
+    isPostTrip,
+    amnestyVotes,
+    amnestyThreshold,
+    amnestyPassed,
+    currentUserEmail: user.email || '',
   }
 }
 
@@ -59,7 +71,8 @@ export default async function ExpensesPage({
   const data = await getExpensesData(tripId)
   if (!data) notFound()
 
-  const { pool, memberCount, members, settlements, isOrganiser, imageUrl, tripDestination } = data
+  const { pool, memberCount, members, settlements, isOrganiser, imageUrl, tripDestination,
+    isPostTrip, amnestyVotes, amnestyThreshold, amnestyPassed, currentUserEmail } = data
   const expenses: Expense[] = pool?.expenses || []
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
   const remaining = (pool?.total_amount || 0) - totalSpent
@@ -193,6 +206,25 @@ export default async function ExpensesPage({
               isOrganiser={isOrganiser}
             />
           </div>
+
+          {/* Debt amnesty vote — post-trip only */}
+          {isPostTrip && (() => {
+            const pendingSettlements = settlements.filter((s) => s.status === 'pending')
+            const pendingAmount = pendingSettlements.reduce((sum, s) => sum + s.amount, 0)
+            return (
+              <AmnestyVoteCard
+                tripId={tripId}
+                initialVotes={amnestyVotes}
+                memberCount={memberCount}
+                threshold={amnestyThreshold}
+                initialPassed={amnestyPassed}
+                currentUserEmail={currentUserEmail}
+                pendingSettlementsCount={pendingSettlements.length}
+                pendingAmount={pendingAmount}
+                currency={pool.currency}
+              />
+            )
+          })()}
         </>
       )}
     </div>
