@@ -92,6 +92,12 @@ export default function PollCard({ poll, tripId, waitingFor, isOrganiser = true 
       <div className="flex flex-col gap-2 pt-1">
         {isOrganiser && !isLocked && (
           <>
+            <Link
+              href={`/vote/${poll.id}`}
+              className="w-full py-1.5 text-xs text-center border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
+            >
+              Cast your vote →
+            </Link>
             <div className="flex gap-2">
               <ShareButton
                 url={buildVoteUrl(poll.id)}
@@ -107,12 +113,6 @@ export default function PollCard({ poll, tripId, waitingFor, isOrganiser = true 
                 Lock now
               </button>
             </div>
-            <Link
-              href={`/vote/${poll.id}`}
-              className="w-full py-1.5 text-xs text-center border border-emerald-300 text-emerald-700 rounded-lg hover:bg-emerald-50 transition-colors"
-            >
-              Cast your vote →
-            </Link>
           </>
         )}
         {isOrganiser && isLocked && (
