@@ -1,5 +1,44 @@
 @AGENTS.md
 
+## Last Session Note (2026-04-04)
+
+**Completed:** Phases 0–6 fully implemented and merged to `main`. Build passes. Vercel deploying.
+
+**DB schema changes needed** — run these in Supabase SQL editor before testing:
+```sql
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id);
+ALTER TABLE public.members ADD COLUMN IF NOT EXISTS upi_id text;
+CREATE INDEX IF NOT EXISTS members_user_id_idx ON public.members(user_id);
+
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS paid_by text;
+ALTER TABLE public.expenses ADD COLUMN IF NOT EXISTS split_between text[];
+
+ALTER TABLE public.trips ADD COLUMN IF NOT EXISTS digest_token text UNIQUE;
+
+CREATE TABLE IF NOT EXISTS public.settlements (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
+  from_email text NOT NULL,
+  to_email text NOT NULL,
+  amount numeric NOT NULL,
+  currency text NOT NULL DEFAULT 'INR',
+  status text NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'confirmed')),
+  upi_ref text,
+  created_at timestamptz DEFAULT now() NOT NULL,
+  confirmed_at timestamptz
+);
+CREATE INDEX IF NOT EXISTS settlements_trip_id_idx ON public.settlements(trip_id);
+ALTER TABLE public.settlements ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Organiser manages settlements"
+  ON public.settlements FOR ALL
+  USING (trip_id IN (SELECT id FROM public.trips WHERE organiser_id = auth.uid()));
+```
+
+**Resume next:** Tier 2 item #7 — Member self-service page (`src/app/trips/[tripId]/member/page.tsx`)
+Then Tier 7 UPI items, Tier 8 Decisions Digest (already done), Tier 9 realtime.
+
+---
+
 # APIcTrips — Project Guide
 
 ## Next.js 16 Breaking Changes (vs training data)
@@ -135,3 +174,161 @@ All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, 
 | Polls / Voting | ✅ | ✅ | ✅ |
 | Expense Pool | ✅ | ✅ | ✅ |
 | Itinerary | ✅ | ✅ | ✅ (run schema.sql block in Supabase) |
+| Mobile Nav (hamburger) | ✅ | — | — |
+
+---
+
+## Session Rules
+
+> These apply to every build session, no exceptions.
+
+1. **Never commit directly to `main`** — Vercel auto-deploys `main`. Always use a feature branch.
+2. **Test locally before merging** — `npm run dev` + verify the feature + `npm run build` (no TS errors).
+3. **Context budget rule — at ~96% context usage: STOP building.** Do the following before the session ends:
+   - Mark completed items ✅ and in-progress items 🚧 in the roadmap below
+   - Add/update a `## Last Session Note` section (top of this file) with: what was done, which item to resume, any pending uncommitted changes
+   - Remind user to commit open changes
+4. **DB changes are additive only** — always use `ADD COLUMN IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS`. Never drop or rename columns.
+
+---
+
+## Build Roadmap
+
+> Ask Claude: **"what's done and what to build next?"** — it will use this section to guide you.
+
+Legend: ✅ Done · 🔲 Not started · 🚧 In progress
+
+### Tier 1 — Foundation (build first, everything depends on this)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 1 | Fix N+1 votes query in polls auto-lock | ✅ | `src/app/trips/[tripId]/polls/page.tsx` |
+| 2 | Parallelize expenses page Supabase fetches | ✅ | `src/app/trips/[tripId]/expenses/page.tsx` |
+| 3 | Fix layout gate — non-organisers see 404 | ✅ | `src/app/trips/[tripId]/layout.tsx` |
+| 4 | Widen `ConflictDetail` type (add style + accommodation) | ✅ | `src/types/index.ts` |
+| 5 | Add error boundaries | ✅ | `src/app/error.tsx`, `src/app/trips/[tripId]/error.tsx` |
+| 6 | Add skeleton loaders (`loading.tsx` per route) | ✅ | `src/app/trips/[tripId]/loading.tsx` + polls/expenses/itinerary |
+
+### Tier 2 — Core Gaps (critical for retention)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 7 | Member self-service — non-organiser trip view, RSVP, vote, log expense | 🔲 | New: `src/app/trips/[tripId]/member/page.tsx` |
+| 8 | Link members to Supabase auth users (`user_id` column) | ✅ | `invite/join/route.ts` updated; DB migration needed |
+| 9 | Fix security gap — expense POST has no auth check | ✅ | `src/app/api/trips/[tripId]/pool/expenses/route.ts` |
+| 10 | Edit trip details (name, destination, dates) | ✅ | `src/app/api/trips/[tripId]/route.ts` (PATCH) |
+| 11 | Delete poll | ✅ | `src/app/api/polls/[pollId]/route.ts` (DELETE added) |
+| 12 | Delete / edit expense | ✅ | `src/app/api/trips/[tripId]/pool/expenses/[expenseId]/route.ts` |
+
+### Tier 3 — Expense Settlement (biggest market pain point)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 13 | Add `paid_by` + `split_between` to expenses schema | ✅ | DB migration needed (see Last Session Note) |
+| 14 | Debt minimization settlement calculator | ✅ | `src/lib/settlement-calculator.ts` |
+| 15 | Settlement ledger UI (net balances + transactions) | ✅ | `src/components/expenses/SettlementLedger.tsx` |
+| 16 | Budget alert banner (≥80% spend) | ✅ | `src/components/expenses/BudgetAlert.tsx` |
+| 17 | Settlements API (create + confirm) | ✅ | `src/app/api/trips/[tripId]/settlements/route.ts` |
+| 18 | Settlements DB table | ✅ | DB migration needed (see Last Session Note) |
+
+### Tier 4 — Vibe Intelligence (biggest differentiator)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 19 | Extend conflict detector to style + accommodation | ✅ | `src/lib/conflict-detector.ts` |
+| 20 | Add `suggestion` field to conflicts | ✅ | `src/lib/conflict-detector.ts` |
+| 21 | Vibe compatibility score (0–100%, weighted 4 dimensions) | ✅ | `src/lib/vibe-score.ts` |
+| 22 | Surface vibe score on trip dashboard | ✅ | `src/app/trips/[tripId]/page.tsx` |
+| 23 | Surface trip health + days-until-trip on dashboard | ✅ | `src/app/trips/[tripId]/page.tsx` |
+| 24 | Anonymous budget disclosure (members submit real budget anonymously) | 🔲 | New feature — schema + API + UI |
+
+### Tier 5 — Performance (market-beating speed)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 25 | Suspense streaming on trip dashboard | 🔲 | `src/app/trips/[tripId]/page.tsx` |
+| 26 | Optimistic UI — expense logging | 🔲 | `src/components/expenses/LogExpenseForm.tsx` |
+| 27 | Optimistic UI — itinerary toggle | 🔲 | `src/components/itinerary/ItineraryClient.tsx` |
+| 28 | Optimistic UI — poll voting | 🔲 | vote components |
+| 29 | Route prefetching on TripNav tabs | ✅ | `src/components/trips/TripNav.tsx` |
+| 30 | Shared `useOptimisticList` hook | ✅ | `src/lib/hooks/useOptimisticList.ts` |
+
+### Tier 6 — Organiser Intelligence
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 31 | Ghost member detection (alert when member disengages) | 🔲 | New logic + dashboard alert |
+| 32 | Dropout ripple effect calculator (cost/itinerary impact) | 🔲 | New: `src/lib/dropout-calculator.ts` |
+| 33 | Trip momentum score (engagement metric with nudges) | 🔲 | New: `src/lib/momentum.ts` |
+| 34 | Compatibility check before adding new member | 🔲 | Invite flow extension |
+
+### Tier 7 — Payments (India-first UPI)
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 35 | UPI ID field on member profile | ✅ | `supabase/schema.sql` + invite form |
+| 36 | `buildUpiLink()` utility | ✅ | New: `src/lib/upi.ts` |
+| 37 | "Pay via UPI" button in settlement ledger | ✅ | `src/components/expenses/SettlementLedger.tsx` |
+| 38 | "I've paid" → organiser confirms flow | ✅ | Settlements API + UI |
+| 39 | Pre-commitment micro-deposit (₹200–500 to confirm attendance) | 🔲 | New flow — Razorpay/UPI |
+
+### Tier 8 — Sharing & Viral Growth
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 40 | Decisions Digest page (all locked polls + itinerary + budget) | ✅ | New: `src/app/trips/[tripId]/digest/page.tsx` |
+| 41 | Public share link via `digest_token` (no auth) | ✅ | New: `src/app/digest/[digestToken]/page.tsx` |
+| 42 | "What We Agreed" timeline (immutable decision log) | 🔲 | New component |
+| 43 | Trip templates (publish itinerary for others to clone) | 🔲 | New feature |
+| 44 | Referral system | 🔲 | New feature |
+
+### Tier 9 — Real-Time Features
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 45 | Live poll vote counts (Supabase Realtime) | 🔲 | polls page |
+| 46 | Activity notifications (in-app toast) | 🔲 | New: notification system |
+| 47 | Live presence (who's viewing the trip) | 🔲 | Supabase Realtime |
+
+### Tier 10 — Mid-Trip Mode
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 48 | Auto-switch to live mode on `start_date` | 🔲 | layout or dashboard |
+| 49 | Receipt photo capture (Supabase Storage) | 🔲 | expense logging |
+| 50 | Pivot poll (instant re-vote mid-trip) | 🔲 | polls |
+| 51 | Emergency card (hospital, embassy, member contacts) | 🔲 | New page |
+| 52 | Shared vendor contact book (driver, hotel, guide) | 🔲 | New feature |
+
+### Tier 11 — AI Features
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 53 | AI itinerary generator (destination + vibe → draft plan) | 🔲 | Claude API integration |
+| 54 | AI conflict resolver (personalised compromise suggestions) | 🔲 | Claude API integration |
+| 55 | Smart budget estimator (destination + group + vibe → range) | 🔲 | Claude API integration |
+
+### Tier 12 — Post-Trip
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 56 | Post-trip debt amnesty vote (forgive small balances) | 🔲 | settlements + voting |
+| 57 | Expense report export (PDF/CSV) | 🔲 | New export route |
+| 58 | Trip recap (auto-generated summary) | 🔲 | New page |
+| 59 | Trip ratings | 🔲 | New feature |
+| 60 | Trip memories / photo gallery (Supabase Storage) | 🔲 | New feature |
+
+### Tier 13 — Monetisation
+| # | Item | Status | Key files |
+|---|------|--------|-----------|
+| 61 | Freemium model (free: 5 members / 1 trip; paid: unlimited) | 🔲 | Auth + billing |
+| 62 | Transaction fee on in-app settlements | 🔲 | Razorpay integration |
+| 63 | Affiliate commission (Booking.com / MakeMyTrip) | 🔲 | Link generation |
+
+---
+
+## USPs vs Competitors
+
+| Competitor | Gap APIcTrips fills |
+|------------|-------------------|
+| Splitwise | Has splitting but zero trip planning — APIcTrips does both |
+| Wanderlog | Has itinerary but no group decisions or vibe matching |
+| Lambus | All-in-one but slow + complex + no compatibility check |
+| TripIt | Personal only — no collaboration |
+
+**Unique features no competitor has:**
+- Vibe compatibility score before planning starts
+- Anonymous budget disclosure (no social awkwardness)
+- Ghost member detection + dropout ripple effect
+- UPI-native payment settlement
+- Trip momentum score
+- Pre-commitment micro-deposit to prevent flaking
+- Decisions Digest shareable link
