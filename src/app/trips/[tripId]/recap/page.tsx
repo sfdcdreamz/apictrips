@@ -4,6 +4,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
 import TripRatingForm from '@/components/trips/TripRatingForm'
+import PublishTemplateButton from '@/components/trips/PublishTemplateButton'
 import { formatDateRange, formatDate } from '@/lib/utils'
 import type { Poll, Expense, ItineraryItem, Member, ExpenseCategory } from '@/types'
 import { differenceInDays, parseISO } from 'date-fns'
@@ -340,6 +341,17 @@ export default async function RecapPage({
               <p className="text-sm font-semibold">Plan Next Trip</p>
             </Link>
           </div>
+
+          {/* Publish as template */}
+          {isOrganiser && itinerary.length > 0 && (
+            <div className="bg-white rounded-2xl border border-stone-100 p-5">
+              <h2 className="text-sm font-semibold text-gray-700 mb-3">Share your itinerary</h2>
+              <p className="text-xs text-gray-400 mb-3">
+                Publish your {itinerary.length}-item itinerary so others can clone it for their own trips.
+              </p>
+              <PublishTemplateButton tripId={tripId} />
+            </div>
+          )}
         </>
       )}
     </div>
