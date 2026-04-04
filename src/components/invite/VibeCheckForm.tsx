@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
+import { useRouter } from 'next/navigation'
 import type { VibeBudget, VibePace, VibeStyle, VibeAccommodation, MemberStatus, Member } from '@/types'
 import { computeVibeScore } from '@/lib/vibe-score'
 
@@ -67,6 +68,7 @@ interface Props {
 }
 
 export default function VibeCheckForm({ inviteCode, tripName, existingVibeMembers = [] }: Props) {
+  const router = useRouter()
   const [step, setStep] = useState<'form' | 'done'>('form')
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -130,7 +132,9 @@ export default function VibeCheckForm({ inviteCode, tripName, existingVibeMember
       return
     }
 
+    const tripId = data.trip_id
     setStep('done')
+    router.push(`/auth/signup?email=${encodeURIComponent(email)}&next=/trips/${tripId}/member`)
   }
 
   if (step === 'done') {
@@ -138,9 +142,7 @@ export default function VibeCheckForm({ inviteCode, tripName, existingVibeMember
       <div className="text-center py-8">
         <div className="text-4xl mb-3">🎉</div>
         <h2 className="text-xl font-semibold text-gray-900 mb-2">You&apos;re in!</h2>
-        <p className="text-gray-500 text-sm">
-          You&apos;ve joined <strong>{tripName}</strong>. The organiser will be in touch.
-        </p>
+        <p className="text-gray-500 text-sm">Setting up your account…</p>
       </div>
     )
   }

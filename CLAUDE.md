@@ -1,6 +1,6 @@
 @AGENTS.md
 
-## Last Session Note (2026-04-04, Session 4)
+## Last Session Note (2026-04-04, Session 5)
 
 **Completed this session:**
 - ✅ #45 Live poll counts (Realtime) — `PollsRealtimeWrapper` now subscribes to poll UPDATE (lock) + INSERT (new poll) events
@@ -8,6 +8,7 @@
 - ✅ #50 Pivot poll — `PivotPollForm` (red card, duration select 1/2/4/6h); shown on polls page when trip is LIVE
 - ✅ #52 Vendor contact book — `vendor_contacts` table, GET/POST/DELETE API, `/trips/[tripId]/vendors` page + Vendors tab; organiser adds, all members read with tap-to-call
 - ✅ #49 Receipt photo capture — POST/GET `/api/.../receipt` route, receipt upload step in `LogExpenseForm`, 📎 icon in `ExpenseList`
+- fix: promoted "Cast your vote →" above Share/Lock buttons in `PollCard.tsx` (UI polish, no logic change)
 
 **DB schema changes still needed** — run ALL of these in Supabase SQL editor if not already applied:
 ```sql
