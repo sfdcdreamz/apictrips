@@ -129,8 +129,11 @@ src/
         pool/route.ts
         pool/expenses/route.ts
         pool/expenses/[expenseId]/route.ts
+        pool/expenses/[expenseId]/receipt/route.ts  # POST upload / GET signed URL
         settlements/route.ts
         settlements/[settlementId]/route.ts
+        vendors/route.ts             # GET (member+organiser) / POST (organiser)
+        vendors/[vendorId]/route.ts  # DELETE (organiser)
       itinerary/[itemId]/route.ts # PATCH (toggle done) / DELETE
       polls/[pollId]/route.ts     # PATCH (lock/reopen) / DELETE
       polls/[pollId]/vote/route.ts
@@ -146,7 +149,9 @@ src/
       emergency/page.tsx          # Emergency card — members + India emergency numbers
       expenses/page.tsx
       itinerary/page.tsx
-      polls/page.tsx
+      polls/page.tsx              # + PivotPollForm when isLive
+      timeline/page.tsx           # "What We Agreed" chronological timeline (member+organiser)
+      vendors/page.tsx            # Vendor contact book (member read / organiser write)
       vibe-check/page.tsx
     dashboard/page.tsx
     digest/[digestToken]/page.tsx # Public shareable digest (no auth)
@@ -155,11 +160,18 @@ src/
   components/
     budget/
       BudgetDistributionCard.tsx  # Anonymous budget disclosure bar chart
+    decisions/
+      AgreementTimeline.tsx       # Date-grouped decision + expense timeline (used in digest + timeline page)
+      CreatePollForm.tsx
+      PivotPollForm.tsx           # Fast poll with duration select (1/2/4/6h) — LIVE mode only
+      PollCard.tsx
+      PollsRealtimeWrapper.tsx    # Realtime votes + poll INSERT/UPDATE subscriptions
     expenses/
       BudgetAlert.tsx             # ≥80% spend alert
-      ExpenseList.tsx
-      LogExpenseForm.tsx          # Optimistic UI
+      ExpenseList.tsx             # Shows 📎 receipt icon when receipt_url present
+      LogExpenseForm.tsx          # Optimistic UI + optional receipt upload step
       PoolSetupForm.tsx
+      ReceiptButton.tsx           # Fetches signed URL + opens receipt in new tab
       SettlementLedger.tsx        # Net balances + UPI pay button
     invite/
       VibeCheckForm.tsx           # Join form + live Vibe Impact preview
@@ -169,13 +181,16 @@ src/
     trips/
       CopyInviteButton.tsx
       EditTripForm.tsx            # Inline edit name/destination/dates (organiser)
-      TripNav.tsx                 # Tabs + LIVE badge + Emergency tab
+      TripNav.tsx                 # Tabs + LIVE badge (Timeline, Emergency, Vendors tabs added)
       TripPresence.tsx            # Supabase Realtime presence indicator
       TripRoleContext.tsx
     ui/
       ActivityToast.tsx           # In-app activity notifications
       DestinationHero.tsx
       Skeleton.tsx
+    vendors/
+      AddVendorForm.tsx           # Organiser: add driver/hotel/guide contacts
+      DeleteVendorButton.tsx      # Organiser: delete vendor with confirm dialog
     vote/
       VoteForm.tsx                # Optimistic poll voting
   lib/
@@ -233,10 +248,11 @@ export async function POST(
 | `polls` | `trip_id`, `options` (text[]), `status` (open/locked), `winning_option` |
 | `votes` | `poll_id`, `member_email`, `option_chosen` |
 | `pools` | `trip_id`, `total_amount`, `currency` |
-| `expenses` | `pool_id`, `amount`, `category`, `logged_by`, `paid_by`, `split_between`, `expense_date` |
+| `expenses` | `pool_id`, `amount`, `category`, `logged_by`, `paid_by`, `split_between`, `expense_date`, `receipt_url` |
 | `itinerary_items` | `trip_id`, `day_number`, `title`, `item_type`, `status` (pending/done), `cost` |
 | `settlements` | `trip_id`, `from_email`, `to_email`, `amount`, `status` (pending/confirmed), `upi_ref` |
 | `budget_disclosures` | `trip_id`, `member_email`, `budget_range` — one row per member, anonymous |
+| `vendor_contacts` | `trip_id`, `name`, `role`, `phone`, `notes`, `added_by` |
 
 All tables use `uuid_generate_v4()` PKs and have RLS enabled. Service role client bypasses RLS — use it only after verifying auth manually.
 
@@ -258,7 +274,7 @@ const [{ data: a }, { data: b }, { data: c }] = await Promise.all([
 
 ## Types (`src/types/index.ts`)
 
-All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, `Expense`, `ItineraryItem`, `TripHealth`, `ConflictResult`, `Settlement`.
+All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, `Expense`, `ItineraryItem`, `TripHealth`, `ConflictResult`, `Settlement`, `VendorContact`.
 
 ## Module Status
 
@@ -268,12 +284,17 @@ All shared types live here. Key ones: `Trip`, `Member`, `Poll`, `Vote`, `Pool`, 
 | Members / Invite | ✅ | ✅ | ✅ |
 | Vibe Check + Compatibility Score | ✅ | ✅ | ✅ |
 | Polls / Voting | ✅ | ✅ | ✅ |
+| Live Poll Realtime (votes + lock + new poll) | ✅ | — | — |
+| Pivot Poll (LIVE mode fast decision) | ✅ | — | — |
 | Expense Pool + Settlement | ✅ | ✅ | ✅ |
+| Receipt Photo Capture (Supabase Storage) | ✅ | ✅ | ✅ |
 | Itinerary | ✅ | ✅ | ✅ |
 | Anonymous Budget Disclosure | ✅ | ✅ | ✅ |
 | Ghost Detection + Dropout Ripple + Momentum | ✅ | — | — |
 | Decisions Digest (public share) | ✅ | ✅ | ✅ |
+| "What We Agreed" Timeline | ✅ | — | — |
 | Emergency Card | ✅ | — | — |
+| Vendor Contact Book | ✅ | ✅ | ✅ |
 | CSV Expense Export | — | ✅ | — |
 | Live Mode (LIVE badge + banner) | ✅ | — | — |
 | Live Presence (Supabase Realtime) | ✅ | — | — |
@@ -444,5 +465,9 @@ Remaining high-value items: #53–55 (AI — needs `ANTHROPIC_API_KEY`), #39 (pr
 - Trip momentum score
 - Pre-commitment micro-deposit to prevent flaking
 - Decisions Digest shareable link
+- "What We Agreed" immutable decision timeline
 - Live presence indicator
 - Emergency card with member contacts
+- Vendor contact book (tap-to-call for drivers, hotels, guides)
+- Receipt photo capture on expenses
+- Pivot poll for fast mid-trip decisions
