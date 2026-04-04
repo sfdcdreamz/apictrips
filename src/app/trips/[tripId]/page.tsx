@@ -9,6 +9,7 @@ import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
 import CopyInviteButton from '@/components/trips/CopyInviteButton'
 import EditTripForm from '@/components/trips/EditTripForm'
+import BudgetDistributionCard from '@/components/budget/BudgetDistributionCard'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
 
 async function getTripData(tripId: string) {
@@ -34,13 +35,20 @@ async function getTripData(tripId: string) {
     { data: pool },
     { data: iItems },
     imageUrl,
+    { data: budgetData },
   ] = await Promise.all([
     serviceSupabase.from('members').select('*').eq('trip_id', tripId).order('joined_at', { ascending: true }),
     serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
     serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
     serviceSupabase.from('itinerary_items').select('day_number').eq('trip_id', tripId),
     getDestinationImage(trip.destination),
+    serviceSupabase.from('budget_disclosures').select('budget_range').eq('trip_id', tripId),
   ])
+
+  const RANGES = ['under-5k', '5k-10k', '10k-20k', '20k-50k', 'over-50k']
+  const budgetCounts: Record<string, number> = {}
+  for (const r of RANGES) budgetCounts[r] = 0
+  for (const d of (budgetData || [])) budgetCounts[d.budget_range] = (budgetCounts[d.budget_range] || 0) + 1
 
   return {
     trip,
@@ -49,6 +57,8 @@ async function getTripData(tripId: string) {
     pool: (pool || null) as (Pool & { expenses: Expense[] }) | null,
     itineraryDays: new Set((iItems || []).map((i: { day_number: number }) => i.day_number)).size,
     imageUrl,
+    budgetCounts,
+    budgetTotal: (budgetData || []).length,
   }
 }
 
@@ -66,7 +76,7 @@ export default async function TripDashboardPage({
   if (!result) notFound()
   if ('redirect' in result) redirect(`/trips/${tripId}/member`)
 
-  const { trip, members, polls, pool, itineraryDays, imageUrl } = result
+  const { trip, members, polls, pool, itineraryDays, imageUrl, budgetCounts, budgetTotal } = result
   const conflicts = detectConflicts(members)
   const vibeScore = computeVibeScore(members)
   const tripHealth = computeTripHealth(members, polls)
@@ -281,6 +291,9 @@ export default async function TripDashboardPage({
           </div>
         </div>
       )}
+
+      {/* Budget distribution (anonymous member submissions) */}
+      <BudgetDistributionCard counts={budgetCounts} total={budgetTotal} />
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">

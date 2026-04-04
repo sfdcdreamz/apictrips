@@ -1,6 +1,7 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import MemberDashboardClient from '@/components/trips/MemberDashboardClient'
+import BudgetDisclosureCard from '@/components/budget/BudgetDisclosureCard'
 import type { Member, PollWithVotes, ItineraryItem } from '@/types'
 
 async function getMemberData(tripId: string) {
@@ -18,9 +19,10 @@ async function getMemberData(tripId: string) {
   if (!trip) return null
   if (!member) return null
 
-  const [{ data: polls }, { data: iItems }] = await Promise.all([
+  const [{ data: polls }, { data: iItems }, { data: disclosure }] = await Promise.all([
     serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
     serviceSupabase.from('itinerary_items').select('*').eq('trip_id', tripId).order('day_number').order('time'),
+    serviceSupabase.from('budget_disclosures').select('id').eq('trip_id', tripId).eq('member_email', user.email!).single(),
   ])
 
   return {
@@ -28,6 +30,7 @@ async function getMemberData(tripId: string) {
     member: member as Member,
     polls: (polls || []) as PollWithVotes[],
     itinerary: (iItems || []) as ItineraryItem[],
+    alreadyDisclosed: !!disclosure,
   }
 }
 
@@ -40,7 +43,7 @@ export default async function MemberPage({
   const data = await getMemberData(tripId)
   if (!data) notFound()
 
-  const { trip, member, polls, itinerary } = data
+  const { trip, member, polls, itinerary, alreadyDisclosed } = data
   const lockedPolls = polls.filter((p) => p.status === 'locked')
   const openPolls = polls.filter((p) => p.status === 'open')
 
@@ -55,6 +58,9 @@ export default async function MemberPage({
           {new Date(trip.end_date).toLocaleDateString('en-IN', { month: 'short', day: 'numeric', year: 'numeric' })}
         </p>
       </div>
+
+      {/* Anonymous budget disclosure */}
+      <BudgetDisclosureCard tripId={tripId} alreadySubmitted={alreadyDisclosed} />
 
       {/* My RSVP + UPI — client interactive */}
       <MemberDashboardClient
