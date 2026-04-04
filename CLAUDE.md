@@ -1,11 +1,18 @@
 @AGENTS.md
 
-## Last Session Note (2026-04-04)
+## Last Session Note (2026-04-04, Session 2)
 
-**Completed:** Phases 0–6 fully implemented and merged to `main`. Build passes. Vercel deploying.
+**Completed this session:**
+- ✅ #7 Member self-service page (`/trips/[id]/member`) — RSVP toggle, UPI ID, polls, itinerary read-only
+- ✅ Non-organiser redirect: `/trips/[id]` now redirects non-organisers to `/trips/[id]/member`
+- ✅ UPI ID field in VibeCheckForm + join route
+- ✅ EditTripForm component (inline edit of name/destination/dates, organiser only)
+- ✅ Optimistic UI for itinerary toggle (#27), expense logging (#26), poll vote highlight (#28)
+- ✅ #24 Anonymous budget disclosure — member submits range anonymously, organiser sees bar chart
 
-**DB schema changes needed** — run these in Supabase SQL editor before testing:
+**DB schema changes still needed** — run ALL of these in Supabase SQL editor before testing:
 ```sql
+-- From previous session (Phases 2–6)
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS user_id uuid REFERENCES auth.users(id);
 ALTER TABLE public.members ADD COLUMN IF NOT EXISTS upi_id text;
 CREATE INDEX IF NOT EXISTS members_user_id_idx ON public.members(user_id);
@@ -32,10 +39,24 @@ ALTER TABLE public.settlements ENABLE ROW LEVEL SECURITY;
 CREATE POLICY IF NOT EXISTS "Organiser manages settlements"
   ON public.settlements FOR ALL
   USING (trip_id IN (SELECT id FROM public.trips WHERE organiser_id = auth.uid()));
+
+-- NEW this session (#24 anonymous budget disclosure)
+CREATE TABLE IF NOT EXISTS public.budget_disclosures (
+  id uuid DEFAULT uuid_generate_v4() PRIMARY KEY,
+  trip_id uuid REFERENCES public.trips(id) ON DELETE CASCADE NOT NULL,
+  member_email text NOT NULL,
+  budget_range text NOT NULL CHECK (budget_range IN ('under-5k', '5k-10k', '10k-20k', '20k-50k', 'over-50k')),
+  submitted_at timestamptz DEFAULT now() NOT NULL,
+  UNIQUE (trip_id, member_email)
+);
+CREATE INDEX IF NOT EXISTS budget_disclosures_trip_id_idx ON public.budget_disclosures(trip_id);
+ALTER TABLE public.budget_disclosures ENABLE ROW LEVEL SECURITY;
+CREATE POLICY IF NOT EXISTS "Members can upsert own disclosure"
+  ON public.budget_disclosures FOR ALL
+  USING (member_email = auth.email());
 ```
 
-**Resume next:** Tier 2 item #7 — Member self-service page (`src/app/trips/[tripId]/member/page.tsx`)
-Then Tier 7 UPI items, Tier 8 Decisions Digest (already done), Tier 9 realtime.
+**Resume next:** Tier 5 #25 (Suspense streaming on dashboard) → Tier 6 (ghost member, dropout ripple) → Tier 9 (realtime).
 
 ---
 
@@ -211,7 +232,7 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 2 — Core Gaps (critical for retention)
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 7 | Member self-service — non-organiser trip view, RSVP, vote, log expense | 🔲 | New: `src/app/trips/[tripId]/member/page.tsx` |
+| 7 | Member self-service — non-organiser trip view, RSVP, vote, log expense | ✅ | `src/app/trips/[tripId]/member/page.tsx` |
 | 8 | Link members to Supabase auth users (`user_id` column) | ✅ | `invite/join/route.ts` updated; DB migration needed |
 | 9 | Fix security gap — expense POST has no auth check | ✅ | `src/app/api/trips/[tripId]/pool/expenses/route.ts` |
 | 10 | Edit trip details (name, destination, dates) | ✅ | `src/app/api/trips/[tripId]/route.ts` (PATCH) |
@@ -236,15 +257,15 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 | 21 | Vibe compatibility score (0–100%, weighted 4 dimensions) | ✅ | `src/lib/vibe-score.ts` |
 | 22 | Surface vibe score on trip dashboard | ✅ | `src/app/trips/[tripId]/page.tsx` |
 | 23 | Surface trip health + days-until-trip on dashboard | ✅ | `src/app/trips/[tripId]/page.tsx` |
-| 24 | Anonymous budget disclosure (members submit real budget anonymously) | 🔲 | New feature — schema + API + UI |
+| 24 | Anonymous budget disclosure (members submit real budget anonymously) | ✅ | `src/app/api/trips/[tripId]/budget-disclosure/route.ts`, `src/components/budget/` |
 
 ### Tier 5 — Performance (market-beating speed)
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
 | 25 | Suspense streaming on trip dashboard | 🔲 | `src/app/trips/[tripId]/page.tsx` |
-| 26 | Optimistic UI — expense logging | 🔲 | `src/components/expenses/LogExpenseForm.tsx` |
-| 27 | Optimistic UI — itinerary toggle | 🔲 | `src/components/itinerary/ItineraryClient.tsx` |
-| 28 | Optimistic UI — poll voting | 🔲 | vote components |
+| 26 | Optimistic UI — expense logging | ✅ | `src/components/expenses/LogExpenseForm.tsx` |
+| 27 | Optimistic UI — itinerary toggle | ✅ | `src/components/itinerary/ItineraryClient.tsx` |
+| 28 | Optimistic UI — poll voting | ✅ | `src/components/vote/VoteForm.tsx` |
 | 29 | Route prefetching on TripNav tabs | ✅ | `src/components/trips/TripNav.tsx` |
 | 30 | Shared `useOptimisticList` hook | ✅ | `src/lib/hooks/useOptimisticList.ts` |
 
