@@ -15,6 +15,7 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import ShareButton from '@/components/ui/ShareButton'
 import EditTripForm from '@/components/trips/EditTripForm'
 import BudgetDistributionCard from '@/components/budget/BudgetDistributionCard'
+import AffiliateBookingLinks from '@/components/trips/AffiliateBookingLinks'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
 
 // ─── Fast fetcher (no Unsplash, no budget_disclosures) ────────────────────────
@@ -457,6 +458,15 @@ export default async function TripDashboardPage({
           <div className="text-2xl mb-1.5">📅</div>
           <div className="text-sm font-medium text-gray-700">Itinerary</div>
         </Link>
+      </div>
+
+      {/* Booking links */}
+      <div className="bg-white rounded-2xl border border-stone-100 p-5">
+        <AffiliateBookingLinks
+          destination={trip.destination}
+          checkIn={trip.start_date}
+          checkOut={trip.end_date}
+        />
       </div>
 
       {/* Recent activity */}
