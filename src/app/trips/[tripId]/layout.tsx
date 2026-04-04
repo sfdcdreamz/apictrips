@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import TripNav from '@/components/trips/TripNav'
 import TripRoleProvider from '@/components/trips/TripRoleContext'
+import ActivityToast from '@/components/ui/ActivityToast'
 
 export default async function TripLayout({
   children,
@@ -43,6 +44,7 @@ export default async function TripLayout({
           members={(members || []).map((m) => ({ name: m.name }))}
         />
         {children}
+        <ActivityToast tripId={tripId} />
       </div>
     </TripRoleProvider>
   )

@@ -1,16 +1,23 @@
+import { Suspense } from 'react'
 import { notFound, redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { detectConflicts } from '@/lib/conflict-detector'
 import { computeVibeScore } from '@/lib/vibe-score'
 import { computeTripHealth } from '@/lib/trip-health'
+import { detectGhostMembers } from '@/lib/ghost-detector'
+import { computeMomentum } from '@/lib/momentum'
+import { calculateDropoutRipple } from '@/lib/dropout-calculator'
 import { formatDateRange, buildInviteUrl, getInitials, getAvatarColor } from '@/lib/utils'
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
+import { CardSkeleton } from '@/components/ui/Skeleton'
 import CopyInviteButton from '@/components/trips/CopyInviteButton'
 import EditTripForm from '@/components/trips/EditTripForm'
 import BudgetDistributionCard from '@/components/budget/BudgetDistributionCard'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
+
+// ─── Fast fetcher (no Unsplash, no budget_disclosures) ────────────────────────
 
 async function getTripData(tripId: string) {
   const supabase = await createClient()
@@ -26,7 +33,6 @@ async function getTripData(tripId: string) {
     .single()
   if (!trip) return null
 
-  // Non-organisers get redirected to the member view
   if (trip.organiser_id !== user.id) return { redirect: true as const, tripId }
 
   const [
@@ -34,21 +40,12 @@ async function getTripData(tripId: string) {
     { data: polls },
     { data: pool },
     { data: iItems },
-    imageUrl,
-    { data: budgetData },
   ] = await Promise.all([
     serviceSupabase.from('members').select('*').eq('trip_id', tripId).order('joined_at', { ascending: true }),
     serviceSupabase.from('polls').select('*, votes(*)').eq('trip_id', tripId).order('created_at', { ascending: false }),
     serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
     serviceSupabase.from('itinerary_items').select('day_number').eq('trip_id', tripId),
-    getDestinationImage(trip.destination),
-    serviceSupabase.from('budget_disclosures').select('budget_range').eq('trip_id', tripId),
   ])
-
-  const RANGES = ['under-5k', '5k-10k', '10k-20k', '20k-50k', 'over-50k']
-  const budgetCounts: Record<string, number> = {}
-  for (const r of RANGES) budgetCounts[r] = 0
-  for (const d of (budgetData || [])) budgetCounts[d.budget_range] = (budgetCounts[d.budget_range] || 0) + 1
 
   return {
     trip,
@@ -56,15 +53,106 @@ async function getTripData(tripId: string) {
     polls: (polls || []) as PollWithVotes[],
     pool: (pool || null) as (Pool & { expenses: Expense[] }) | null,
     itineraryDays: new Set((iItems || []).map((i: { day_number: number }) => i.day_number)).size,
-    imageUrl,
-    budgetCounts,
-    budgetTotal: (budgetData || []).length,
   }
 }
+
+// ─── Region 2: Destination image (async, ~1–3s) ───────────────────────────────
+
+async function DestinationImageLoader({ destination }: { destination: string }) {
+  const imageUrl = await getDestinationImage(destination)
+  return <DestinationHero imageUrl={imageUrl} destination={destination} height="md" />
+}
+
+// ─── Region 3: Insights (async, ~500ms–1s) ────────────────────────────────────
+
+async function DashboardInsights({
+  tripId,
+  members,
+  polls,
+  startDate,
+}: {
+  tripId: string
+  members: Member[]
+  polls: PollWithVotes[]
+  startDate: string
+}) {
+  const serviceSupabase = createServiceRoleClient()
+  const { data: budgetData } = await serviceSupabase
+    .from('budget_disclosures')
+    .select('budget_range')
+    .eq('trip_id', tripId)
+
+  const RANGES = ['under-5k', '5k-10k', '10k-20k', '20k-50k', 'over-50k']
+  const budgetCounts: Record<string, number> = {}
+  for (const r of RANGES) budgetCounts[r] = 0
+  for (const d of (budgetData || [])) budgetCounts[d.budget_range] = (budgetCounts[d.budget_range] || 0) + 1
+  const budgetTotal = (budgetData || []).length
+
+  const conflicts = detectConflicts(members)
+  const tripHealth = computeTripHealth(members, polls)
+  const daysUntilTrip = Math.ceil(
+    (new Date(startDate).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  )
+
+  return (
+    <>
+      {/* Trip Health + countdown */}
+      <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
+        tripHealth.status === 'healthy' ? 'bg-emerald-50 border-emerald-200' :
+        tripHealth.status === 'at-risk' ? 'bg-amber-50 border-amber-200' :
+        'bg-gray-50 border-gray-200'
+      }`}>
+        <div>
+          <p className={`text-sm font-semibold ${
+            tripHealth.status === 'healthy' ? 'text-emerald-800' :
+            tripHealth.status === 'at-risk' ? 'text-amber-800' :
+            'text-gray-600'
+          }`}>
+            {tripHealth.status === 'healthy' ? '✓' : tripHealth.status === 'at-risk' ? '⚠' : '○'} Trip Health: {tripHealth.label}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">{tripHealth.reason}</p>
+        </div>
+        {daysUntilTrip > 0 && (
+          <div className="text-right shrink-0">
+            <p className="text-lg font-bold text-gray-800">{daysUntilTrip}</p>
+            <p className="text-xs text-gray-400">days to go</p>
+          </div>
+        )}
+        {daysUntilTrip <= 0 && (
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-emerald-700">In progress</p>
+          </div>
+        )}
+      </div>
+
+      {/* Vibe conflicts detail */}
+      {conflicts.has_conflict && (
+        <div className="bg-white rounded-2xl border border-stone-100 p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Vibe Conflicts</h2>
+          <div className="space-y-3">
+            {conflicts.conflicts.map((c) => (
+              <div key={c.dimension} className="border-l-2 border-amber-400 pl-3">
+                <p className="text-sm text-gray-700">{c.message}</p>
+                {c.suggestion && <p className="text-xs text-gray-400 mt-0.5">Suggestion: {c.suggestion}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Budget distribution (anonymous member submissions) */}
+      <BudgetDistributionCard counts={budgetCounts} total={budgetTotal} />
+    </>
+  )
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function tripDuration(start: string, end: string): number {
   return Math.round((new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24)) + 1
 }
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default async function TripDashboardPage({
   params,
@@ -76,15 +164,9 @@ export default async function TripDashboardPage({
   if (!result) notFound()
   if ('redirect' in result) redirect(`/trips/${tripId}/member`)
 
-  const { trip, members, polls, pool, itineraryDays, imageUrl, budgetCounts, budgetTotal } = result
-  const conflicts = detectConflicts(members)
+  const { trip, members, polls, pool, itineraryDays } = result
   const vibeScore = computeVibeScore(members)
-  const tripHealth = computeTripHealth(members, polls)
   const inviteUrl = buildInviteUrl(trip.invite_code)
-
-  const daysUntilTrip = Math.ceil(
-    (new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
-  )
 
   const confirmedCount = members.filter((m) => m.status === 'in').length
   const tentativeCount = members.filter((m) => m.status === 'tentative').length
@@ -96,6 +178,12 @@ export default async function TripDashboardPage({
   const remaining = (pool?.total_amount || 0) - totalSpent
   const currencySymbol = pool?.currency === 'INR' ? '₹' : (pool?.currency || '')
   const totalDays = tripDuration(trip.start_date, trip.end_date)
+
+  // Tier 6 intelligence
+  const ghostAlerts = detectGhostMembers(members, polls)
+  const momentum = computeMomentum(members, polls, expenses)
+  const tentativeMembers = members.filter((m) => m.status === 'tentative' && !m.is_organiser)
+  const dropoutRipples = tentativeMembers.map((m) => calculateDropoutRipple(m, members, pool))
 
   type ActivityItem = {
     id: string; label: string; sub: string; time: string; type: 'poll' | 'expense'
@@ -128,10 +216,12 @@ export default async function TripDashboardPage({
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6 space-y-4">
-      {/* Hero */}
+      {/* Hero — text renders immediately; image streams in */}
       <div className="bg-white rounded-2xl border border-stone-100 overflow-hidden">
         <div className="relative">
-          <DestinationHero imageUrl={imageUrl} destination={trip.destination} height="md" />
+          <Suspense fallback={<DestinationHero imageUrl="" destination={trip.destination} height="md" />}>
+            <DestinationImageLoader destination={trip.destination} />
+          </Suspense>
           <div className="absolute top-3 right-3">
             <a
               href="/dashboard"
@@ -184,6 +274,41 @@ export default async function TripDashboardPage({
         <CopyInviteButton inviteUrl={inviteUrl} label="Invite" />
       </div>
 
+      {/* Ghost member alert */}
+      {ghostAlerts.length > 0 && (
+        <div className="bg-orange-50 border border-orange-200 rounded-xl px-4 py-3">
+          <p className="text-sm font-semibold text-orange-800 mb-1">
+            👻 {ghostAlerts.length} ghost member{ghostAlerts.length > 1 ? 's' : ''} detected
+          </p>
+          <div className="space-y-0.5">
+            {ghostAlerts.map((g) => (
+              <p key={g.member.id} className="text-xs text-orange-700">
+                <span className="font-medium">{g.member.name}</span> — {g.reason} · joined {g.daysSinceJoined}d ago
+              </p>
+            ))}
+          </div>
+          <p className="text-xs text-orange-500 mt-1.5">Send them a nudge to re-engage</p>
+        </div>
+      )}
+
+      {/* Dropout ripple — for tentative members */}
+      {dropoutRipples.length > 0 && dropoutRipples.some((r) => r.financial) && (
+        <div className="bg-white rounded-2xl border border-stone-100 p-4">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Dropout Ripple Effect</h2>
+          <div className="space-y-2">
+            {dropoutRipples.filter((r) => r.financial).map((r) => (
+              <div key={r.member.id} className="flex items-center justify-between text-sm">
+                <span className="text-gray-600">If <span className="font-medium">{r.member.name}</span> drops out</span>
+                <span className="text-amber-700 font-semibold text-xs">
+                  +{r.financial!.currency === 'INR' ? '₹' : r.financial!.currency}{r.financial!.extraPerPerson.toLocaleString()} per person
+                </span>
+              </div>
+            ))}
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Based on remaining unspent budget split across confirmed members</p>
+        </div>
+      )}
+
       {/* Alert: open polls */}
       {openPolls.length > 0 && (
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-center justify-between gap-3">
@@ -197,7 +322,7 @@ export default async function TripDashboardPage({
       )}
 
       {/* Stats grid */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3" id="stats-grid">
         <div className="bg-white rounded-xl border border-stone-100 p-4">
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Decisions</p>
           <p className="text-2xl font-bold text-gray-800">{lockedPolls.length}</p>
@@ -248,52 +373,41 @@ export default async function TripDashboardPage({
         </div>
       </div>
 
-      {/* Trip Health + countdown */}
+      {/* Momentum score */}
       <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
-        tripHealth.status === 'healthy' ? 'bg-emerald-50 border-emerald-200' :
-        tripHealth.status === 'at-risk' ? 'bg-amber-50 border-amber-200' :
-        'bg-gray-50 border-gray-200'
+        momentum.color === 'emerald' ? 'bg-emerald-50 border-emerald-200' :
+        momentum.color === 'amber' ? 'bg-amber-50 border-amber-200' :
+        'bg-red-50 border-red-200'
       }`}>
         <div>
           <p className={`text-sm font-semibold ${
-            tripHealth.status === 'healthy' ? 'text-emerald-800' :
-            tripHealth.status === 'at-risk' ? 'text-amber-800' :
-            'text-gray-600'
+            momentum.color === 'emerald' ? 'text-emerald-800' :
+            momentum.color === 'amber' ? 'text-amber-800' :
+            'text-red-800'
           }`}>
-            {tripHealth.status === 'healthy' ? '✓' : tripHealth.status === 'at-risk' ? '⚠' : '○'} Trip Health: {tripHealth.label}
+            Trip Momentum: {momentum.label}
           </p>
-          <p className="text-xs text-gray-500 mt-0.5">{tripHealth.reason}</p>
+          {momentum.nudge && <p className="text-xs text-gray-500 mt-0.5">{momentum.nudge}</p>}
         </div>
-        {daysUntilTrip > 0 && (
-          <div className="text-right shrink-0">
-            <p className="text-lg font-bold text-gray-800">{daysUntilTrip}</p>
-            <p className="text-xs text-gray-400">days to go</p>
-          </div>
-        )}
-        {daysUntilTrip <= 0 && (
-          <div className="text-right shrink-0">
-            <p className="text-sm font-bold text-emerald-700">In progress</p>
-          </div>
-        )}
+        <div className="text-right shrink-0">
+          <p className={`text-2xl font-bold ${
+            momentum.color === 'emerald' ? 'text-emerald-700' :
+            momentum.color === 'amber' ? 'text-amber-700' :
+            'text-red-700'
+          }`}>{momentum.score}</p>
+          <p className="text-xs text-gray-400">/100</p>
+        </div>
       </div>
 
-      {/* Vibe conflicts detail */}
-      {conflicts.has_conflict && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-5">
-          <h2 className="text-sm font-semibold text-gray-700 mb-3">Vibe Conflicts</h2>
-          <div className="space-y-3">
-            {conflicts.conflicts.map((c) => (
-              <div key={c.dimension} className="border-l-2 border-amber-400 pl-3">
-                <p className="text-sm text-gray-700">{c.message}</p>
-                {c.suggestion && <p className="text-xs text-gray-400 mt-0.5">Suggestion: {c.suggestion}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Budget distribution (anonymous member submissions) */}
-      <BudgetDistributionCard counts={budgetCounts} total={budgetTotal} />
+      {/* Insights (health, conflicts, budget) — streams in */}
+      <Suspense fallback={<><CardSkeleton /><CardSkeleton /><CardSkeleton /></>}>
+        <DashboardInsights
+          tripId={tripId}
+          members={members}
+          polls={polls}
+          startDate={trip.start_date}
+        />
+      </Suspense>
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">

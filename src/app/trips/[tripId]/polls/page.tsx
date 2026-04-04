@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
-import PollCard from '@/components/decisions/PollCard'
+import PollsRealtimeWrapper from '@/components/decisions/PollsRealtimeWrapper'
 import CreatePollForm from '@/components/decisions/CreatePollForm'
 import type { Member, PollWithVotes } from '@/types'
 
@@ -82,8 +82,6 @@ export default async function PollsPage({
   if (!data) notFound()
 
   const { polls, members } = data
-  const openPolls = polls.filter((p) => p.status === 'open')
-  const lockedPolls = polls.filter((p) => p.status === 'locked')
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6 space-y-5">
@@ -99,46 +97,12 @@ export default async function PollsPage({
         <CreatePollForm tripId={tripId} />
       </div>
 
-      {/* Active polls */}
-      {openPolls.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide px-1">Active Polls</h2>
-          {openPolls.map((poll) => {
-            const voterEmails = poll.votes.map((v) => v.member_email)
-            const waitingFor = members
-              .filter((m) => !voterEmails.includes(m.email))
-              .map((m) => m.name)
-            return (
-              <PollCard key={poll.id} poll={poll} tripId={tripId} waitingFor={waitingFor} />
-            )
-          })}
-        </div>
-      )}
-
-      {/* Decision log */}
-      {lockedPolls.length > 0 && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-5">
-          <h2 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-4">Decision Log</h2>
-          <div className="space-y-2">
-            {lockedPolls.map((p) => (
-              <div key={p.id} className="flex items-start gap-3 py-2 border-b border-gray-50 last:border-0">
-                <span className="text-emerald-500 text-lg leading-none mt-0.5">✓</span>
-                <div>
-                  <p className="text-sm font-medium text-gray-800">{p.question}</p>
-                  <p className="text-sm text-emerald-700">→ {p.winning_option}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {polls.length === 0 && (
-        <div className="bg-white rounded-2xl border border-stone-100 p-10 text-center">
-          <div className="text-3xl mb-3">🗳️</div>
-          <p className="text-gray-500 text-sm">No polls yet. Create the first decision above.</p>
-        </div>
-      )}
+      {/* Polls list — with Supabase Realtime vote counts */}
+      <PollsRealtimeWrapper
+        initialPolls={polls}
+        tripId={tripId}
+        members={members}
+      />
     </div>
   )
 }

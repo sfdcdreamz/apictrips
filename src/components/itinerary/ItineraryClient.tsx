@@ -3,6 +3,7 @@
 import { useState, useOptimistic, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import AddActivityForm from './AddActivityForm'
+import GenerateItineraryButton from './GenerateItineraryButton'
 import type { ItineraryItem } from '@/types'
 
 const TYPE_ICONS: Record<string, string> = {
@@ -71,6 +72,11 @@ export default function ItineraryClient({ tripId, days, items }: Props) {
 
   return (
     <div className="space-y-4">
+      {/* AI generate button */}
+      <div className="flex justify-end">
+        <GenerateItineraryButton tripId={tripId} hasItems={items.length > 0} />
+      </div>
+
       {/* Day tabs */}
       <div className="flex gap-2 overflow-x-auto pb-1">
         {days.map((d) => (

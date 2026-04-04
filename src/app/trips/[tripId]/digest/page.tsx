@@ -3,6 +3,7 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { formatDateRange } from '@/lib/utils'
 import type { Poll, Expense, ItineraryItem } from '@/types'
 import DigestShareButton from '@/components/trips/DigestShareButton'
+import AgreementTimeline from '@/components/decisions/AgreementTimeline'
 
 async function getDigestData(tripId: string) {
   const supabase = await createClient()
@@ -130,6 +131,9 @@ export default async function DigestPage({
           </div>
         </div>
       )}
+
+      {/* What We Agreed — immutable decision + expense timeline */}
+      <AgreementTimeline polls={polls as Poll[]} expenses={expenses} currencySymbol={currencySymbol} />
 
       {/* Members */}
       <div className="bg-white rounded-2xl border border-stone-100 p-5">
