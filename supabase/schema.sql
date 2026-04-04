@@ -55,6 +55,12 @@ create policy "Organisers can view their trips"
   on public.trips for select
   using (auth.uid() = organiser_id);
 
+create policy "Members can view trips they joined"
+  on public.trips for select
+  using (
+    id in (select trip_id from public.members where email = auth.email())
+  );
+
 create policy "Organisers can create trips"
   on public.trips for insert
   with check (auth.uid() = organiser_id);
@@ -67,6 +73,10 @@ create policy "Members can view trip members"
       select id from public.trips where organiser_id = auth.uid()
     )
   );
+
+create policy "Members can view own membership"
+  on public.members for select
+  using (email = auth.email());
 
 create policy "Anyone can join a trip"
   on public.members for insert
