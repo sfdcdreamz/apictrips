@@ -3,7 +3,9 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import PoolSetupForm from '@/components/expenses/PoolSetupForm'
 import LogExpenseForm from '@/components/expenses/LogExpenseForm'
 import ExpenseList from '@/components/expenses/ExpenseList'
-import type { Pool, Expense, ExpenseCategory } from '@/types'
+import BudgetAlert from '@/components/expenses/BudgetAlert'
+import SettlementLedger from '@/components/expenses/SettlementLedger'
+import type { Pool, Expense, ExpenseCategory, Member, Settlement } from '@/types'
 
 const CATEGORY_ICONS: Record<ExpenseCategory, string> = {
   Flights: '✈️',
@@ -21,27 +23,26 @@ async function getExpensesData(tripId: string) {
 
   const { data: trip } = await supabase
     .from('trips')
-    .select('id, group_size')
+    .select('id, group_size, organiser_id')
     .eq('id', tripId)
-    .eq('organiser_id', user.id)
     .single()
   if (!trip) return null
 
+  // Allow organisers and members (non-organisers checked via layout)
   const serviceSupabase = createServiceRoleClient()
-  const { data: pool } = await serviceSupabase
-    .from('pools')
-    .select('*, expenses(*)')
-    .eq('trip_id', tripId)
-    .single()
 
-  const { data: members } = await supabase
-    .from('members')
-    .select('id')
-    .eq('trip_id', tripId)
+  const [{ data: pool }, { data: members }, { data: settlements }] = await Promise.all([
+    serviceSupabase.from('pools').select('*, expenses(*)').eq('trip_id', tripId).single(),
+    serviceSupabase.from('members').select('id, name, email, upi_id').eq('trip_id', tripId),
+    serviceSupabase.from('settlements').select('*').eq('trip_id', tripId).order('created_at', { ascending: false }),
+  ])
 
   return {
     pool: pool as (Pool & { expenses: Expense[] }) | null,
     memberCount: members?.length || 0,
+    members: (members || []) as Pick<Member, 'id' | 'name' | 'email' | 'upi_id'>[],
+    settlements: (settlements || []) as Settlement[],
+    isOrganiser: trip.organiser_id === user.id,
   }
 }
 
@@ -54,7 +55,7 @@ export default async function ExpensesPage({
   const data = await getExpensesData(tripId)
   if (!data) notFound()
 
-  const { pool, memberCount } = data
+  const { pool, memberCount, members, settlements, isOrganiser } = data
   const expenses: Expense[] = pool?.expenses || []
   const totalSpent = expenses.reduce((sum, e) => sum + e.amount, 0)
   const remaining = (pool?.total_amount || 0) - totalSpent
@@ -100,6 +101,14 @@ export default async function ExpensesPage({
         </div>
       ) : (
         <>
+          {/* Budget alert */}
+          <BudgetAlert
+            spendPct={spendPct}
+            currencySymbol={currencySymbol}
+            totalSpent={totalSpent}
+            totalAmount={pool.total_amount}
+          />
+
           {/* Progress */}
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <div className="flex items-center justify-between mb-3">
@@ -156,13 +165,26 @@ export default async function ExpensesPage({
           {/* Log expense */}
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Log an expense</h2>
-            <LogExpenseForm tripId={tripId} />
+            <LogExpenseForm tripId={tripId} members={members} />
           </div>
 
           {/* Recent */}
           <div className="bg-white rounded-2xl border border-stone-100 p-5">
             <h2 className="text-sm font-semibold text-gray-700 mb-4">Recent Expenses</h2>
             <ExpenseList expenses={recentExpenses} currency={pool.currency} />
+          </div>
+
+          {/* Settlement ledger */}
+          <div className="bg-white rounded-2xl border border-stone-100 p-5">
+            <h2 className="text-sm font-semibold text-gray-700 mb-4">Settlement</h2>
+            <SettlementLedger
+              expenses={expenses}
+              members={members}
+              existingSettlements={settlements}
+              currency={pool.currency}
+              tripId={tripId}
+              isOrganiser={isOrganiser}
+            />
           </div>
         </>
       )}

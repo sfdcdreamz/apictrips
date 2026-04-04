@@ -29,12 +29,15 @@ export interface Member {
   vibe_accommodation: VibeAccommodation | null
   vibe_completed: boolean
   joined_at: string
+  user_id?: string | null
+  upi_id?: string | null
 }
 
 export interface ConflictDetail {
-  dimension: 'budget' | 'pace'
+  dimension: 'budget' | 'pace' | 'style' | 'accommodation'
   values: string[]
   message: string
+  suggestion?: string
 }
 
 export interface ConflictResult {
@@ -67,6 +70,21 @@ export interface Pool {
 export interface Expense {
   id: string; pool_id: string; amount: number; category: ExpenseCategory
   description: string; logged_by: string; expense_date: string; created_at: string
+  paid_by?: string | null
+  split_between?: string[] | null
+}
+
+export interface Settlement {
+  id: string
+  trip_id: string
+  from_email: string
+  to_email: string
+  amount: number
+  currency: string
+  status: 'pending' | 'confirmed'
+  upi_ref?: string | null
+  created_at: string
+  confirmed_at?: string | null
 }
 
 export type TripHealthStatus = 'healthy' | 'at-risk' | 'not-started'

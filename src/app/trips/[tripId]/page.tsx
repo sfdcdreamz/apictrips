@@ -2,6 +2,8 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { detectConflicts } from '@/lib/conflict-detector'
+import { computeVibeScore } from '@/lib/vibe-score'
+import { computeTripHealth } from '@/lib/trip-health'
 import { formatDateRange, buildInviteUrl, getInitials, getAvatarColor } from '@/lib/utils'
 import { getDestinationImage } from '@/lib/destination-image'
 import DestinationHero from '@/components/ui/DestinationHero'
@@ -62,7 +64,13 @@ export default async function TripDashboardPage({
 
   const { trip, members, polls, pool, itineraryDays, imageUrl } = result
   const conflicts = detectConflicts(members)
+  const vibeScore = computeVibeScore(members)
+  const tripHealth = computeTripHealth(members, polls)
   const inviteUrl = buildInviteUrl(trip.invite_code)
+
+  const daysUntilTrip = Math.ceil(
+    (new Date(trip.start_date).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+  )
 
   const confirmedCount = members.filter((m) => m.status === 'in').length
   const tentativeCount = members.filter((m) => m.status === 'tentative').length
@@ -198,10 +206,66 @@ export default async function TripDashboardPage({
 
         <div className="bg-white rounded-xl border border-stone-100 p-4">
           <p className="text-xs text-gray-400 uppercase tracking-wide mb-2">Vibe</p>
-          <p className="text-2xl font-bold text-gray-800">{conflicts.has_conflict ? conflicts.conflicts.length : 0}</p>
-          <p className="text-xs text-gray-400 mt-1">{conflicts.has_conflict ? 'conflict' + (conflicts.conflicts.length > 1 ? 's' : '') : 'all aligned'}</p>
+          {vibeScore.score > 0 ? (
+            <>
+              <p className={`text-2xl font-bold ${
+                vibeScore.score >= 80 ? 'text-emerald-600' :
+                vibeScore.score >= 60 ? 'text-amber-500' : 'text-red-500'
+              }`}>{vibeScore.score}%</p>
+              <p className="text-xs text-gray-400 mt-1">{vibeScore.label}</p>
+            </>
+          ) : (
+            <>
+              <p className="text-2xl font-bold text-gray-300">—</p>
+              <p className="text-xs text-gray-400 mt-1">no vibes yet</p>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Trip Health + countdown */}
+      <div className={`rounded-xl border px-4 py-3 flex items-center justify-between gap-3 ${
+        tripHealth.status === 'healthy' ? 'bg-emerald-50 border-emerald-200' :
+        tripHealth.status === 'at-risk' ? 'bg-amber-50 border-amber-200' :
+        'bg-gray-50 border-gray-200'
+      }`}>
+        <div>
+          <p className={`text-sm font-semibold ${
+            tripHealth.status === 'healthy' ? 'text-emerald-800' :
+            tripHealth.status === 'at-risk' ? 'text-amber-800' :
+            'text-gray-600'
+          }`}>
+            {tripHealth.status === 'healthy' ? '✓' : tripHealth.status === 'at-risk' ? '⚠' : '○'} Trip Health: {tripHealth.label}
+          </p>
+          <p className="text-xs text-gray-500 mt-0.5">{tripHealth.reason}</p>
+        </div>
+        {daysUntilTrip > 0 && (
+          <div className="text-right shrink-0">
+            <p className="text-lg font-bold text-gray-800">{daysUntilTrip}</p>
+            <p className="text-xs text-gray-400">days to go</p>
+          </div>
+        )}
+        {daysUntilTrip <= 0 && (
+          <div className="text-right shrink-0">
+            <p className="text-sm font-bold text-emerald-700">In progress</p>
+          </div>
+        )}
+      </div>
+
+      {/* Vibe conflicts detail */}
+      {conflicts.has_conflict && (
+        <div className="bg-white rounded-2xl border border-stone-100 p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">Vibe Conflicts</h2>
+          <div className="space-y-3">
+            {conflicts.conflicts.map((c) => (
+              <div key={c.dimension} className="border-l-2 border-amber-400 pl-3">
+                <p className="text-sm text-gray-700">{c.message}</p>
+                {c.suggestion && <p className="text-xs text-gray-400 mt-0.5">Suggestion: {c.suggestion}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Quick actions */}
       <div className="grid grid-cols-3 gap-3">

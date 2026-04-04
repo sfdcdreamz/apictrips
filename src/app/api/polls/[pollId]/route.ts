@@ -70,3 +70,35 @@ export async function PATCH(
 
   return NextResponse.json({ error: 'Invalid action' }, { status: 400 })
 }
+
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ pollId: string }> }
+) {
+  const { pollId } = await params
+  const supabase = await createClient()
+
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  const serviceSupabase = createServiceRoleClient()
+
+  const { data: poll } = await serviceSupabase
+    .from('polls')
+    .select('trip_id')
+    .eq('id', pollId)
+    .single()
+  if (!poll) return NextResponse.json({ error: 'Poll not found' }, { status: 404 })
+
+  const { data: trip } = await supabase
+    .from('trips')
+    .select('id')
+    .eq('id', poll.trip_id)
+    .eq('organiser_id', user.id)
+    .single()
+  if (!trip) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+
+  const { error } = await serviceSupabase.from('polls').delete().eq('id', pollId)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return new NextResponse(null, { status: 204 })
+}

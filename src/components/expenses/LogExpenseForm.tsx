@@ -2,21 +2,23 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import type { ExpenseCategory } from '@/types'
+import type { ExpenseCategory, Member } from '@/types'
 
 const CATEGORIES: ExpenseCategory[] = ['Flights', 'Stay', 'Food', 'Transport', 'Experiences', 'Misc']
 
 interface Props {
   tripId: string
+  members?: Pick<Member, 'email' | 'name'>[]
 }
 
-export default function LogExpenseForm({ tripId }: Props) {
+export default function LogExpenseForm({ tripId, members = [] }: Props) {
   const router = useRouter()
   const [showForm, setShowForm] = useState(false)
   const [amount, setAmount] = useState('')
   const [category, setCategory] = useState<ExpenseCategory>('Misc')
   const [description, setDescription] = useState('')
   const [loggedBy, setLoggedBy] = useState('')
+  const [paidBy, setPaidBy] = useState('')
   const [date, setDate] = useState(new Date().toISOString().split('T')[0])
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -35,6 +37,7 @@ export default function LogExpenseForm({ tripId }: Props) {
         description,
         logged_by: loggedBy,
         expense_date: date,
+        paid_by: paidBy || null,
       }),
     })
 
@@ -49,6 +52,7 @@ export default function LogExpenseForm({ tripId }: Props) {
     setAmount('')
     setDescription('')
     setLoggedBy('')
+    setPaidBy('')
     setDate(new Date().toISOString().split('T')[0])
     setShowForm(false)
     router.refresh()
@@ -130,6 +134,22 @@ export default function LogExpenseForm({ tripId }: Props) {
           />
         </div>
       </div>
+
+      {members.length > 0 && (
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Paid by (for settlement)</label>
+          <select
+            value={paidBy}
+            onChange={(e) => setPaidBy(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-violet-500"
+          >
+            <option value="">— optional —</option>
+            {members.map((m) => (
+              <option key={m.email} value={m.email}>{m.name}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && (
         <p className="text-red-500 text-sm bg-red-50 px-3 py-2 rounded-lg">{error}</p>
