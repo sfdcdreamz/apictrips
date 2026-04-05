@@ -15,6 +15,8 @@ import { CardSkeleton } from '@/components/ui/Skeleton'
 import ShareButton from '@/components/ui/ShareButton'
 import EditTripForm from '@/components/trips/EditTripForm'
 import BudgetDistributionCard from '@/components/budget/BudgetDistributionCard'
+import AIBudgetEstimator from '@/components/budget/AIBudgetEstimator'
+import AIConflictSuggestions from '@/components/decisions/AIConflictSuggestions'
 import AffiliateBookingLinks from '@/components/trips/AffiliateBookingLinks'
 import type { Member, PollWithVotes, Pool, Expense } from '@/types'
 
@@ -156,11 +158,13 @@ async function DashboardInsights({
               </div>
             ))}
           </div>
+          <AIConflictSuggestions tripId={tripId} hasConflicts={conflicts.has_conflict} />
         </div>
       )}
 
       {/* Budget distribution (anonymous member submissions) */}
       <BudgetDistributionCard counts={budgetCounts} total={budgetTotal} />
+      <AIBudgetEstimator tripId={tripId} />
     </>
   )
 }

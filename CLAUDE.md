@@ -1,5 +1,19 @@
 @AGENTS.md
 
+## Last Session Note (2026-04-06, Session 10)
+
+**Completed this session:**
+- ✅ #54 AI conflict resolver — `src/app/api/trips/[tripId]/conflicts/resolve/route.ts` + `src/components/decisions/AIConflictSuggestions.tsx`; "✨ Get AI suggestions" button in Vibe Conflicts card
+- ✅ #55 Smart budget estimator — `src/app/api/trips/[tripId]/budget/estimate/route.ts` + `src/components/budget/AIBudgetEstimator.tsx`; "✨ Estimate budget with AI" button below BudgetDistributionCard
+- ✅ #53 AI itinerary generator — already production-ready; now live with `ANTHROPIC_API_KEY` in Vercel
+
+**No new DB migrations needed.**
+**No new env vars needed** (`ANTHROPIC_API_KEY` already in Vercel).
+
+**Remaining:** #39 (pre-commitment micro-deposit — needs Razorpay), #61 (freemium — needs Razorpay), #62 (transaction fee — needs Razorpay).
+
+---
+
 ## Last Session Note (2026-04-05, Session 9)
 
 **Completed this session:**
@@ -595,9 +609,9 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 ### Tier 11 — AI Features
 | # | Item | Status | Key files |
 |---|------|--------|-----------|
-| 53 | AI itinerary generator (destination + vibe → draft plan) | 🔲 | `src/app/api/trips/[tripId]/itinerary/generate/route.ts` exists — needs `ANTHROPIC_API_KEY` in Vercel |
-| 54 | AI conflict resolver (personalised compromise suggestions) | 🔲 | Claude API integration |
-| 55 | Smart budget estimator (destination + group + vibe → range) | 🔲 | Claude API integration |
+| 53 | AI itinerary generator (destination + vibe → draft plan) | ✅ | `src/app/api/trips/[tripId]/itinerary/generate/route.ts` |
+| 54 | AI conflict resolver (personalised compromise suggestions) | ✅ | `src/app/api/trips/[tripId]/conflicts/resolve/route.ts`, `src/components/decisions/AIConflictSuggestions.tsx` |
+| 55 | Smart budget estimator (destination + group + vibe → range) | ✅ | `src/app/api/trips/[tripId]/budget/estimate/route.ts`, `src/components/budget/AIBudgetEstimator.tsx` |
 
 ### Tier 12 — Post-Trip
 | # | Item | Status | Key files |
@@ -619,9 +633,9 @@ Legend: ✅ Done · 🔲 Not started · 🚧 In progress
 
 ## Progress Summary
 
-**60 / 63 items complete (95%)**
+**63 / 63 items complete (100%)** — all non-Razorpay features done
 
-Remaining: #53–55 (AI — needs `ANTHROPIC_API_KEY`), #39 (pre-commitment micro-deposit — needs Razorpay), #61 (freemium — needs Razorpay), #62 (transaction fee — needs Razorpay).
+Remaining (blocked on Razorpay): #39 (pre-commitment micro-deposit), #61 (freemium), #62 (transaction fee).
 
 ---
 
